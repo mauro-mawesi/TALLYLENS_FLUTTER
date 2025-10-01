@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Inset del ícono en el splash para tamaños consistentes -->
+    <dimen name="splash_icon_inset">48dp</dimen>
+</resources>
+

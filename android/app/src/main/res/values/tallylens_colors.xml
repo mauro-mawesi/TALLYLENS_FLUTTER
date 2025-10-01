@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash background to match app icon background -->
+    <color name="splash_bg">#0D0E1A</color>
+</resources>
+
