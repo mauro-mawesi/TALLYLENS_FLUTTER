@@ -34,3 +34,7 @@ web/.dart_tool/
 
 # Misc
 .DS_Store
+*:Zone.Identifier
+
+# VS Code
+.vscode/

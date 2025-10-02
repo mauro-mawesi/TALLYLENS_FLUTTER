@@ -5,9 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:recibos_flutter/core/di/service_locator.dart';
 import 'package:recibos_flutter/core/services/image_service.dart';
-import 'package:recibos_flutter/core/services/receipt_service.dart';
 import 'package:recibos_flutter/core/widgets/glass_card.dart';
-import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:recibos_flutter/features/add_receipt/presentation/screens/smart_capture_screen.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart' as ml;
@@ -21,12 +19,13 @@ class AddReceiptScreen extends StatefulWidget {
 
 class _AddReceiptScreenState extends State<AddReceiptScreen> {
   final ImageService _imageService = sl<ImageService>();
-  final ReceiptService _receiptService = sl<ReceiptService>();
 
   File? _selectedImage;
   bool _isLoading = false;
   int _quarterTurns = 0;
   bool _fitHeight = false;
+  bool _processedByMLKit = false;
+  String? _source; // 'camera' | 'gallery'
 
   Future<void> _pickImage(ImageSource source) async {
     if (_isLoading) return;
@@ -34,7 +33,37 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
         ? await _imageService.pickFromGallery()
         : await _imageService.pickFromCamera();
     if (image != null) {
-      setState(() => _selectedImage = image);
+      setState(() {
+        _selectedImage = image;
+        _processedByMLKit = false;
+        _source = source == ImageSource.gallery ? 'gallery' : 'camera';
+      });
+    }
+  }
+
+  Future<void> _handleCameraTap() async {
+    if (_isLoading) return;
+    HapticFeedback.mediumImpact();
+    // Intentar primero con ML Kit (document scanner)
+    File? file = await _scanWithMlKit();
+    if (file != null && mounted) {
+      setState(() {
+        _selectedImage = file;
+        _processedByMLKit = true; // procesada por ML Kit
+        _source = 'camera';
+      });
+      return;
+    }
+    // Fallback a captura inteligente propia (sin ML Kit)
+    final f = await Navigator.of(context).push<File?>(
+      MaterialPageRoute(builder: (_) => const SmartCaptureScreen()),
+    );
+    if (f != null && mounted) {
+      setState(() {
+        _selectedImage = f;
+        _processedByMLKit = false;
+        _source = 'camera';
+      });
     }
   }
 
@@ -85,7 +114,11 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
       final path = _selectedImage!.path;
       if (!mounted) return;
       // ignore: use_build_context_synchronously
-      context.push('/processing', extra: {'uploadPath': path});
+      context.push('/processing', extra: {
+        'uploadPath': path,
+        'processedByMLKit': _processedByMLKit,
+        'source': _source,
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -230,16 +263,8 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                             children: [
                               _NeonCircleButton(
                                 icon: Icons.camera_alt_rounded,
-                                onTap: () async {
-                              HapticFeedback.mediumImpact();
-                              // Intentar ML Kit scanner primero
-                              File? file = await _scanWithMlKit();
-                              file ??= await Navigator.of(context).push<File?>(
-                                MaterialPageRoute(builder: (_) => const SmartCaptureScreen()),
-                              );
-                              if (file != null && mounted) setState(() => _selectedImage = file);
-                              },
-                            ),
+                                onTap: _handleCameraTap,
+                              ),
                               _CircleOutlineButton(
                                 icon: Icons.image_outlined,
                                 onTap: () async {

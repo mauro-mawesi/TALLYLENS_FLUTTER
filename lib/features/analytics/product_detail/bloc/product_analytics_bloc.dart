@@ -41,7 +41,7 @@ class ProductAnalyticsBloc extends Bloc<ProductAnalyticsEvent, ProductAnalyticsS
       ));
     } catch (e) {
       if (e is UnauthorizedException) {
-        await sl<AuthService>().logout();
+        sl<AuthService>().forceLock();
         emit(ProductAnalyticsUnauthorized());
       } else {
         emit(ProductAnalyticsError(e.toString()));
@@ -78,7 +78,7 @@ class ProductAnalyticsBloc extends Bloc<ProductAnalyticsEvent, ProductAnalyticsS
       ));
     } catch (e) {
       if (e is UnauthorizedException) {
-        await sl<AuthService>().logout();
+        sl<AuthService>().forceLock();
         emit(ProductAnalyticsUnauthorized());
       }
     }
@@ -112,7 +112,7 @@ class ProductAnalyticsBloc extends Bloc<ProductAnalyticsEvent, ProductAnalyticsS
       ));
     } catch (e) {
       if (e is UnauthorizedException) {
-        await sl<AuthService>().logout();
+        sl<AuthService>().forceLock();
         emit(ProductAnalyticsUnauthorized());
       }
     }

@@ -43,7 +43,7 @@ class _ProductDetailView extends StatelessWidget {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(AppLocalizations.of(context)!.sessionExpired)),
               );
-              context.go('/login');
+              context.go('/unlock');
             }
           }
         },

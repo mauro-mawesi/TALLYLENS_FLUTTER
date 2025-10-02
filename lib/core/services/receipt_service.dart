@@ -30,13 +30,19 @@ class ReceiptService {
   /// Proceso completo para crear un nuevo recibo.
   /// 1. Sube el archivo de la imagen.
   /// 2. Crea el registro del recibo con la URL de la imagen.
-  Future<Map<String, dynamic>> createNewReceipt(File imageFile) async {
+  Future<Map<String, dynamic>> createNewReceipt(
+    File imageFile, { bool processedByMLKit = false, String? source }
+  ) async {
     try {
       // 1. Subir la imagen
       final imageUrl = await _apiService.uploadImage(imageFile);
 
       // 2. Crear el recibo con la URL obtenida
-      final newReceipt = await _apiService.createReceipt(imageUrl);
+      final newReceipt = await _apiService.createReceipt(
+        imageUrl,
+        processedByMLKit: processedByMLKit,
+        source: source,
+      );
 
       return newReceipt;
     } catch (e) {

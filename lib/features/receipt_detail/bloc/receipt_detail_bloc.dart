@@ -25,7 +25,7 @@ class ReceiptDetailBloc extends Bloc<ReceiptDetailEvent, ReceiptDetailState> {
       emit(ReceiptDetailLoaded(receipt: receipt, items: items));
     } catch (e) {
       if (e is UnauthorizedException) {
-        await sl<AuthService>().logout();
+        sl<AuthService>().forceLock();
         emit(ReceiptDetailUnauthorized());
       } else {
         emit(ReceiptDetailError(e.toString()));
@@ -61,7 +61,7 @@ class ReceiptDetailBloc extends Bloc<ReceiptDetailEvent, ReceiptDetailState> {
       );
     } catch (e) {
       if (e is UnauthorizedException) {
-        await sl<AuthService>().logout();
+        sl<AuthService>().forceLock();
         emit(ReceiptDetailUnauthorized());
       } else {
         emit(ReceiptDetailError(e.toString()));

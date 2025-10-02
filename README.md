@@ -162,13 +162,11 @@ Use `--dart-define` flags to configure the app:
 
 ```bash
 flutter run \
-  --dart-define=API_BASE_URL=http://192.168.1.10:3000/api \
-  --dart-define=ACCESS_TOKEN=your_dev_token_here
+  --dart-define=API_BASE_URL=http://192.168.1.10:3000/api
 ```
 
 Available variables:
 - `API_BASE_URL`: Backend API base URL (default: `http://localhost:3000/api`)
-- `ACCESS_TOKEN`: Development access token (optional)
 
 ### Platform-Specific Setup
 

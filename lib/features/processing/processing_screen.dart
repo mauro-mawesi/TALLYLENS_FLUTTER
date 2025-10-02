@@ -6,6 +6,7 @@ import 'package:recibos_flutter/core/services/api_service.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:recibos_flutter/core/services/receipt_service.dart';
 import 'dart:io';
+import 'package:recibos_flutter/core/services/errors.dart';
 
 class ProcessingScreen extends StatefulWidget {
   final String? receiptId;
@@ -30,6 +31,8 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   int _step = 0;
   String? _receiptId;
   String? _localImagePath;
+  bool _processedByMLKit = false;
+  String? _source; // 'camera' | 'gallery'
   bool _hasError = false;
   String? _errorMessage;
   DateTime? _pollStartedAt;
@@ -53,6 +56,15 @@ class _ProcessingScreenState extends State<ProcessingScreen>
     super.didChangeDependencies();
     if (!_didBoot) {
       _didBoot = true;
+      // Lee flags pasados por navegación (si existen)
+      try {
+        final extra = GoRouterState.of(context).extra;
+        if (extra is Map) {
+          _processedByMLKit = (extra['processedByMLKit'] as bool?) ?? false;
+          final s = extra['source'];
+          if (s is String) _source = s;
+        }
+      } catch (_) {}
       // Inicializa mensajes localizados ahora que hay dependencias
       final t = AppLocalizations.of(context);
       setState(() => _statusText = t?.processingAnalyzing ?? 'Analyzing your receipt...');
@@ -89,7 +101,11 @@ class _ProcessingScreenState extends State<ProcessingScreen>
       setState(() => _statusText = t?.processingUploading ?? 'Uploading image...');
       try {
         final file = File(widget.uploadPath!);
-        final created = await _receiptService.createNewReceipt(file);
+        final created = await _receiptService.createNewReceipt(
+          file,
+          processedByMLKit: _processedByMLKit,
+          source: _source,
+        );
         final data = created is Map<String, dynamic>
             ? (created['data'] as Map<String, dynamic>? ?? created)
             : <String, dynamic>{};
@@ -140,6 +156,10 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         }
       }
     } catch (e) {
+      if (e is UnauthorizedException) {
+        _timer?.cancel();
+        return;
+      }
       if (mounted) {
         setState(() { _hasError = true; _errorMessage = e.toString(); });
       }

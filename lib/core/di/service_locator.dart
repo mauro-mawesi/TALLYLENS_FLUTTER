@@ -27,7 +27,8 @@ void setupServiceLocator() {
 
   // --- Services ---
   // Se registran como LazySingleton para que haya una única instancia en toda la app.
-  sl.registerLazySingleton(() => ApiService()..setAccessToken(kDevAccessToken));
+  // No inyectamos ACCESS_TOKEN de dev: el flujo debe ser igual en dev y prod
+  sl.registerLazySingleton(() => ApiService());
   sl.registerLazySingleton(() => ImageService());
   sl.registerLazySingleton(() => ReceiptService(apiService: sl()));
   sl.registerLazySingleton(() => AuthService(api: sl()));
@@ -35,7 +36,8 @@ void setupServiceLocator() {
   sl.registerLazySingleton(() => LocaleController());
   // Bridge para manejo global de 401 → logout + redirect
   AuthBridge.onUnauthorized = () async {
-    await sl<AuthService>().logout();
+    // Manejo centralizado de 401 (lock o logout si no hay refresh / loop)
+    await sl<AuthService>().handleUnauthorized();
   };
   AuthBridge.onTokensUpdated = (String? access, String? refresh) async {
     await sl<AuthService>().updateTokens(access: access, refresh: refresh);

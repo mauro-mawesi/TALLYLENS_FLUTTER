@@ -10,6 +10,11 @@ class ApiService {
   String? _accessToken;
   String? _refreshToken;
   String _localeCode = 'en';
+  bool _refreshing = false;
+  Future<bool>? _refreshFuture;
+  int _consecutiveRefreshFailures = 0;
+  DateTime? _lastRefreshAttempt;
+  DateTime? _refreshCooldownUntil;
 
   // Base URL configurable
   static const String _baseUrl = baseApiUrl;
@@ -53,30 +58,67 @@ class ApiService {
   }
 
   Future<bool> _refresh() async {
-    final r = await http.post(
-      Uri.parse("$_baseUrl/auth/refresh"),
-      headers: _headers(),
-      body: json.encode({'refreshToken': _refreshToken}),
-    );
-    if (r.statusCode == 200) {
-      final data = json.decode(r.body);
-      final tokens = data['data']?['tokens'];
-      final newAccess = tokens?['accessToken'] as String?;
-      final newRefresh = tokens?['refreshToken'] as String?;
-      if (newAccess != null && newAccess.isNotEmpty) {
-        setAccessToken(newAccess);
-        if (newRefresh != null && newRefresh.isNotEmpty) {
-          setRefreshToken(newRefresh);
-        }
-        final onUpd = AuthBridge.onTokensUpdated;
-        if (onUpd != null) {
-          await onUpd(newAccess, newRefresh);
-        }
-        return true;
-      }
+    final now = DateTime.now().toUtc();
+    if (_refreshCooldownUntil != null && now.isBefore(_refreshCooldownUntil!)) {
+      return false;
     }
-    return false;
+    if (_refreshing && _refreshFuture != null) {
+      return await _refreshFuture!;
+    }
+    Future<bool> doRefresh() async {
+      _lastRefreshAttempt = DateTime.now().toUtc();
+      final r = await http.post(
+        Uri.parse("$_baseUrl/auth/refresh"),
+        headers: _headers(),
+        body: json.encode({'refreshToken': _refreshToken}),
+      );
+      if (r.statusCode == 200) {
+        final data = json.decode(r.body);
+        final tokens = data['data']?['tokens'];
+        final newAccess = tokens?['accessToken'] as String?;
+        final newRefresh = tokens?['refreshToken'] as String?;
+        if (newAccess != null && newAccess.isNotEmpty) {
+          setAccessToken(newAccess);
+          if (newRefresh != null && newRefresh.isNotEmpty) {
+            setRefreshToken(newRefresh);
+          }
+          final onUpd = AuthBridge.onTokensUpdated;
+          if (onUpd != null) {
+            await onUpd(newAccess, newRefresh);
+          }
+          _consecutiveRefreshFailures = 0;
+          _refreshCooldownUntil = null;
+          return true;
+        }
+      }
+      // Non-200 or missing tokens: set cooldown/backoff
+      _consecutiveRefreshFailures += 1;
+      Duration backoff;
+      if (r.statusCode == 429) {
+        // Rate limited: exponential backoff starting at 30s
+        backoff = Duration(seconds: 30 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 8));
+      } else {
+        // Other errors: modest backoff to avoid spamming
+        backoff = Duration(seconds: 5 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
+      }
+      _refreshCooldownUntil = DateTime.now().toUtc().add(backoff);
+      return false;
+    }
+    try {
+      _refreshing = true;
+      _refreshFuture = doRefresh();
+      return await _refreshFuture!;
+    } finally {
+      _refreshing = false;
+      _refreshFuture = null;
+    }
   }
+
+  /// Exposes a public way to refresh tokens proactively.
+  /// Returns true if tokens were refreshed successfully.
+  Future<bool> refreshNow() => _refresh();
+
+  DateTime? get refreshCooldownUntil => _refreshCooldownUntil;
 
   Future<List<dynamic>> getReceipts({
     String? category,
@@ -189,11 +231,19 @@ class ApiService {
   }
 
   /// Crea un nuevo registro de recibo a partir de una URL de imagen.
-  Future<Map<String, dynamic>> createReceipt(String imageUrl) async {
+  /// Opcionalmente puede indicar si la imagen ya fue procesada por ML Kit y su origen.
+  Future<Map<String, dynamic>> createReceipt(
+    String imageUrl, { bool? processedByMLKit, String? source }
+  ) async {
+    final payload = <String, dynamic>{
+      "imageUrl": imageUrl,
+      if (processedByMLKit != null) "processedByMLKit": processedByMLKit,
+      if (source != null) "source": source,
+    };
     final response = await _authorized(() => http.post(
       Uri.parse("$_baseUrl/receipts"),
       headers: _headers(),
-      body: json.encode({"imageUrl": imageUrl}),
+      body: json.encode(payload),
     ));
 
     if (response.statusCode == 201) {
