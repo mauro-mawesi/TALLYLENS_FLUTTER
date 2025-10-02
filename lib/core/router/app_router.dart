@@ -15,17 +15,34 @@ import 'package:recibos_flutter/features/navigation/app_shell.dart';
 import 'package:recibos_flutter/features/profile/profile_screen.dart';
 import 'package:recibos_flutter/features/analytics/spending/spending_analysis_screen.dart';
 import 'package:recibos_flutter/features/analytics/product_detail/product_detail_screen.dart';
+import 'package:recibos_flutter/core/locale/onboarding_controller.dart';
+import 'package:recibos_flutter/core/di/service_locator.dart';
+import 'package:recibos_flutter/features/onboarding/onboarding_screen.dart';
 
-GoRouter createRouter(AuthService auth) => GoRouter(
-  initialLocation: auth.isLoggedIn
-      ? (auth.biometricEnabled && auth.locked ? '/unlock' : '/')
-      : '/login',
+GoRouter createRouter(AuthService auth) {
+  final onboarding = sl<OnboardingController>();
+  return GoRouter(
+  initialLocation: !onboarding.isDone
+      ? '/onboarding'
+      : (auth.isLoggedIn
+          ? (auth.biometricEnabled && auth.locked ? '/unlock' : '/')
+          : '/login'),
   refreshListenable: auth,
   redirect: (context, state) {
+    final obDone = onboarding.isDone;
     final loggedIn = auth.isLoggedIn;
     final loggingIn = state.matchedLocation == '/login';
     final registering = state.matchedLocation == '/register';
     final unlocking = state.matchedLocation == '/unlock';
+    final onboardingPath = state.matchedLocation == '/onboarding';
+
+    // 1) Onboarding: si no está completo, permitimos quedarse en onboarding y no redirigir a nada más
+    if (!obDone) {
+      if (!onboardingPath) return '/onboarding';
+      return null; // permanecer en onboarding sin considerar otras reglas
+    }
+
+    // 2) Autenticación
     if (!loggedIn && !(loggingIn || registering)) return '/login';
     if (loggedIn) {
       if (auth.biometricEnabled && auth.locked && !unlocking) return '/unlock';
@@ -34,6 +51,11 @@ GoRouter createRouter(AuthService auth) => GoRouter(
     return null;
   },
   routes: [
+    GoRoute(
+      path: '/onboarding',
+      name: 'onboarding',
+      builder: (context, state) => const OnboardingScreen(),
+    ),
     GoRoute(
       path: '/login',
       name: 'login',
@@ -55,7 +77,7 @@ GoRouter createRouter(AuthService auth) => GoRouter(
         GoRoute(
           path: '/',
           name: 'receipts_list',
-          builder: (context, state) => const ReceiptsListScreen(),
+          builder: (context, state) => ReceiptsListScreen(initialFilters: state.extra as Map<String, dynamic>?),
         ),
         GoRoute(
           path: '/dashboard',
@@ -126,6 +148,7 @@ GoRouter createRouter(AuthService auth) => GoRouter(
     ),
   ],
 );
+}
 
 class _NotificationsScreen extends StatelessWidget {
   const _NotificationsScreen();

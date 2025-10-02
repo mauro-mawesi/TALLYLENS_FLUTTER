@@ -68,6 +68,34 @@ class _SpendingAnalysisView extends StatelessWidget {
             final values = spots.map((s) => s.y).toList();
             final minY = values.isEmpty ? 0.0 : (values.reduce((a, b) => a < b ? a : b) * 0.9);
             final maxY = values.isEmpty ? 1.0 : (values.reduce((a, b) => a > b ? a : b) * 1.1);
+            final localeTag = Localizations.localeOf(context).toLanguageTag();
+            String mmm3(DateTime d) {
+              final raw = DateFormat.MMM(localeTag).format(d).replaceAll('.', '').trim();
+              final base = (raw.length <= 3 ? raw : raw.substring(0, 3)).toUpperCase();
+              final yy = (d.year % 100).toString().padLeft(2, '0');
+              return '$base $yy';
+            }
+            final monthLabels = sortedMonths.map((d) => mmm3(d)).toList();
+
+            if (categories.isEmpty && spots.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(AppLocalizations.of(context)!.seeInsightsCta, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: () => GoRouter.of(context).push('/add'),
+                        icon: const Icon(Icons.add),
+                        label: Text(AppLocalizations.of(context)!.addFirstReceipt),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
 
             return RefreshIndicator(
               onRefresh: () async => context.read<SpendingAnalyticsBloc>().add(LoadSpending(months: months)),
@@ -107,7 +135,23 @@ class _SpendingAnalysisView extends StatelessWidget {
                       children: [
                         SizedBox(height: 220, child: _Donut(categories: categories)),
                         const SizedBox(height: 8),
-                        ...categories.take(6).map((c) => _LegendTile(c: c as Map<String, dynamic>)).toList(),
+                        ...categories.take(6).toList().asMap().entries.expand((e) {
+                          final idx = e.key;
+                          final c = e.value as Map<String, dynamic>;
+                          final colors = [
+                            const Color(0xFF8A2BE2),
+                            const Color(0xFF00E3FF),
+                            const Color(0xFF00FF7F),
+                            const Color(0xFFFFC107),
+                            const Color(0xFFFF6F61),
+                            const Color(0xFF29B6F6),
+                          ];
+                          final color = colors[idx % colors.length];
+                          return [
+                            _LegendTile(c: c, color: color),
+                            if (idx < (categories.length.clamp(0, 6) - 1)) const Divider(height: 12),
+                          ];
+                        }).toList(),
                       ],
                     ),
                   ),
@@ -126,6 +170,7 @@ class _SpendingAnalysisView extends StatelessWidget {
                               gradient: const [Color(0xFF8A2BE2), Color(0xFF00E3FF)],
                               minY: minY,
                               maxY: maxY,
+                              xLabels: monthLabels,
                             ),
                           ),
                   ),
@@ -234,7 +279,8 @@ class _Donut extends StatelessWidget {
 
 class _LegendTile extends StatelessWidget {
   final Map<String, dynamic> c;
-  const _LegendTile({required this.c});
+  final Color color;
+  const _LegendTile({required this.c, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -245,8 +291,10 @@ class _LegendTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: Row(
         children: [
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
           Expanded(child: Text('$name • ${pct.toStringAsFixed(0)}%')),
-          Text(_formatCurrency(context, spent)),
+          Text(_formatCurrency(context, spent), style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
         ],
       ),
     );

@@ -147,9 +147,9 @@ class ProfileScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     _LangTile(emoji: '🇬🇧', label: t.languageEnglish, code: 'en'),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    Divider(height: 1, indent: 16, endIndent: 16, thickness: 0.8, color: FlowColors.divider(context)),
                     _LangTile(emoji: '🇪🇸', label: t.languageSpanish, code: 'es'),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    Divider(height: 1, indent: 16, endIndent: 16, thickness: 0.8, color: FlowColors.divider(context)),
                     _LangTile(emoji: '🇳🇱', label: t.languageDutch, code: 'nl'),
                   ],
                 ),
@@ -184,7 +184,7 @@ class ProfileScreen extends StatelessWidget {
                         await auth.setBiometricEnabled(v);
                       },
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    Divider(height: 1, indent: 16, endIndent: 16, thickness: 0.8, color: FlowColors.divider(context)),
                     SwitchListTile(
                       title: Text(
                         'Blur en app switcher',
@@ -197,7 +197,7 @@ class ProfileScreen extends StatelessWidget {
                         await sl<PrivacyController>().setBlurOnBackground(v);
                       },
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    Divider(height: 1, indent: 16, endIndent: 16, thickness: 0.8, color: FlowColors.divider(context)),
                     // Bloquear capturas (Android) desactivado temporalmente por compatibilidad de plugin.
                     SwitchListTile(
                       title: Text(
@@ -210,7 +210,7 @@ class ProfileScreen extends StatelessWidget {
                         await auth.setAutoLockEnabled(v);
                       },
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    Divider(height: 1, indent: 16, endIndent: 16, thickness: 0.8, color: FlowColors.divider(context)),
                     ListTile(
                       leading: Icon(Icons.timer_outlined, color: FlowColors.textSecondary(context)),
                       title: Text(
@@ -256,7 +256,7 @@ class ProfileScreen extends StatelessWidget {
                         context.go('/unlock');
                       },
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    Divider(height: 1, indent: 16, endIndent: 16, thickness: 0.8, color: FlowColors.divider(context)),
                     ListTile(
                       leading: const Icon(Icons.logout, color: Color(0xFFFF6B6B)),
                       title: Text(

@@ -9,6 +9,8 @@ class NeonLineChart extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final bool showDots;
   final bool showGrid;
+  final List<String>? xLabels;
+  final String Function(int index, double y)? tooltipLabelBuilder;
 
   const NeonLineChart({
     super.key,
@@ -19,6 +21,8 @@ class NeonLineChart extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
     this.showDots = false,
     this.showGrid = false,
+    this.xLabels,
+    this.tooltipLabelBuilder,
   });
 
   @override
@@ -31,7 +35,34 @@ class NeonLineChart extends StatelessWidget {
           minY: minY,
           maxY: maxY,
           gridData: FlGridData(show: showGrid, drawVerticalLine: false, getDrawingHorizontalLine: (v) => FlLine(color: cs.outline.withOpacity(0.08), strokeWidth: 1)),
-          titlesData: const FlTitlesData(show: false),
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: xLabels != null && xLabels!.isNotEmpty,
+                reservedSize: 24,
+                interval: 1,
+                getTitlesWidget: (value, meta) {
+                  if (xLabels == null || xLabels!.isEmpty) return const SizedBox.shrink();
+                  final i = value.round();
+                  if (i < 0 || i >= xLabels!.length) return const SizedBox.shrink();
+                  // Reduce cantidad de labels para evitar saturación
+                  final step = (xLabels!.length / 6).ceil().clamp(1, xLabels!.length);
+                  if (i % step != 0 && i != xLabels!.length - 1) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      xLabels![i],
+                      style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  );
+                },
+              ),
+            ),
+            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
           borderData: FlBorderData(show: false),
           lineTouchData: LineTouchData(
             handleBuiltInTouches: true,

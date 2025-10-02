@@ -77,6 +77,14 @@ class _ProductDetailView extends StatelessWidget {
             final values = spots.map((s) => s.y).toList();
             final minY = values.isEmpty ? 0.0 : (values.reduce((a, b) => a < b ? a : b) * 0.95);
             final maxY = values.isEmpty ? 1.0 : (values.reduce((a, b) => a > b ? a : b) * 1.05);
+            final localeTag = Localizations.localeOf(context).toLanguageTag();
+            String mmm3(DateTime d) {
+              final raw = DateFormat.MMM(localeTag).format(d).replaceAll('.', '').trim();
+              final base = (raw.length <= 3 ? raw : raw.substring(0, 3)).toUpperCase();
+              final yy = (d.year % 100).toString().padLeft(2, '0');
+              return '$base $yy';
+            }
+            final monthLabels = sortedMonths.map((d) => mmm3(d)).toList();
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -149,6 +157,7 @@ class _ProductDetailView extends StatelessWidget {
                             gradient: const [Color(0xFF8A2BE2), Color(0xFF00E3FF)],
                             minY: minY,
                             maxY: maxY,
+                            xLabels: monthLabels,
                           ),
                         ),
                     ],

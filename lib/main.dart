@@ -13,6 +13,7 @@ import 'package:recibos_flutter/core/services/lock_bridge.dart';
 import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:recibos_flutter/core/services/privacy_controller.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:recibos_flutter/core/locale/onboarding_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +24,7 @@ Future<void> main() async {
   await sl<LocaleController>().load();
   // Privacidad
   await sl<PrivacyController>().load();
+  await sl<OnboardingController>().load();
   // Propaga el locale al ApiService para enviar X-Locale
   final lc = sl<LocaleController>();
   final api = sl<ApiService>();

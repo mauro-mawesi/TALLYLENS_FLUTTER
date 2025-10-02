@@ -73,6 +73,14 @@ class _AnalyticsOverviewView extends StatelessWidget {
             final values = spots.map((s) => s.y).toList();
             final minY = values.isEmpty ? 0.0 : (values.reduce((a, b) => a < b ? a : b) * 0.9);
             final maxY = values.isEmpty ? 1.0 : (values.reduce((a, b) => a > b ? a : b) * 1.1);
+            final localeTag = Localizations.localeOf(context).toLanguageTag();
+            String mmm3(DateTime d) {
+              final raw = DateFormat.MMM(localeTag).format(d).replaceAll('.', '').trim();
+              final base = (raw.length <= 3 ? raw : raw.substring(0, 3)).toUpperCase();
+              final yy = (d.year % 100).toString().padLeft(2, '0');
+              return '$base $yy';
+            }
+            final monthLabels = sortedMonths.map((d) => mmm3(d)).toList();
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -114,11 +122,36 @@ class _AnalyticsOverviewView extends StatelessWidget {
                                 : sev == 'medium'
                                     ? Colors.amberAccent
                                     : cs.secondary; // green
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              leading: CircleAvatar(backgroundColor: color.withOpacity(0.15), child: Icon(Icons.warning_amber_rounded, color: color)),
-                              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              subtitle: Text(message, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4.0),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: color.withOpacity(0.15),
+                                    child: Icon(Icons.warning_amber_rounded, color: color),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                                            ),
+                                            _SeverityChip(label: sev.toUpperCase(), color: color),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(message, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             );
                           }).toList(),
                         ),
@@ -167,6 +200,7 @@ class _AnalyticsOverviewView extends StatelessWidget {
                             gradient: const [Color(0xFF8A2BE2), Color(0xFF00E3FF)],
                             minY: minY,
                             maxY: maxY,
+                            xLabels: monthLabels,
                           ),
                         )
                       else
@@ -227,7 +261,9 @@ class _CategoryTile extends StatelessWidget {
     final name = (data['category'] ?? '-').toString();
     final pct = double.tryParse((data['percentage'] ?? '0').toString()) ?? 0.0;
     final spent = (data['totalSpent'] ?? 0).toString();
-    return Padding(
+    return InkWell(
+      onTap: () => GoRouter.of(context).go('/', extra: {'category': name}),
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
         children: [
@@ -256,8 +292,12 @@ class _CategoryTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text('\$' + spent.toString()),
+          Text(
+            _formatCurrency(context, spent.toString()),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
         ],
+      ),
       ),
     );
   }
@@ -303,4 +343,22 @@ String _formatCurrency(BuildContext context, String numberLike) {
   final fmt = NumberFormat.simpleCurrency(locale: locale);
   final val = double.tryParse(numberLike) ?? 0.0;
   return fmt.format(val);
+}
+
+class _SeverityChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SeverityChip({required this.label, required this.color});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 11)),
+    );
+  }
 }

@@ -16,19 +16,32 @@ import 'package:intl/intl.dart';
 import 'package:recibos_flutter/core/services/connectivity_service.dart';
 
 class ReceiptsListScreen extends StatelessWidget {
-  const ReceiptsListScreen({super.key});
+  final Map<String, dynamic>? initialFilters;
+  const ReceiptsListScreen({super.key, this.initialFilters});
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => sl<ReceiptsListBloc>()..add(FetchReceipts()),
-      child: const ReceiptsListView(),
+      create: (context) {
+        final bloc = sl<ReceiptsListBloc>();
+        if (initialFilters != null && initialFilters!.isNotEmpty) {
+          bloc.add(FetchReceipts(
+            category: initialFilters!['category'] as String?,
+            merchant: initialFilters!['merchant'] as String?,
+          ));
+        } else {
+          bloc.add(FetchReceipts());
+        }
+        return bloc;
+      },
+      child: ReceiptsListView(initialFilters: initialFilters),
     );
   }
 }
 
 class ReceiptsListView extends StatefulWidget {
-  const ReceiptsListView({super.key});
+  final Map<String, dynamic>? initialFilters;
+  const ReceiptsListView({super.key, this.initialFilters});
 
   @override
   State<ReceiptsListView> createState() => _ReceiptsListViewState();
@@ -36,11 +49,13 @@ class ReceiptsListView extends StatefulWidget {
 
 class _ReceiptsListViewState extends State<ReceiptsListView> {
   final ScrollController _scroll = ScrollController();
+  Map<String, dynamic>? _currentFilters;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _currentFilters = widget.initialFilters;
   }
 
   void _onScroll() {
@@ -216,7 +231,26 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
 
   Widget _buildReceiptsList(BuildContext context, AppLocalizations t, List<dynamic> receipts, {required bool loadingMore, required bool hasMore}) {
     if (receipts.isEmpty) {
-      return SliverFillRemaining(child: Center(child: Text(t.noReceiptsYet)));
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(t.noReceiptsYet, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () => context.push('/add'),
+                  icon: const Icon(Icons.add),
+                  label: Text(AppLocalizations.of(context)!.addFirstReceipt),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     return SliverList(
       delegate: SliverChildBuilderDelegate(
