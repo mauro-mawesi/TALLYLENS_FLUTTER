@@ -13,6 +13,7 @@ import 'package:recibos_flutter/features/receipts_list/presentation/widgets/filt
 import 'package:recibos_flutter/core/services/auth_service.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
+import 'package:recibos_flutter/core/services/connectivity_service.dart';
 
 class ReceiptsListScreen extends StatelessWidget {
   const ReceiptsListScreen({super.key});
@@ -26,8 +27,38 @@ class ReceiptsListScreen extends StatelessWidget {
   }
 }
 
-class ReceiptsListView extends StatelessWidget {
+class ReceiptsListView extends StatefulWidget {
   const ReceiptsListView({super.key});
+
+  @override
+  State<ReceiptsListView> createState() => _ReceiptsListViewState();
+}
+
+class _ReceiptsListViewState extends State<ReceiptsListView> {
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final max = _scroll.position.maxScrollExtent;
+    final current = _scroll.position.pixels;
+    if (max - current < 400) {
+      if (!sl<ConnectivityService>().isOnline) return;
+      // Cargar más cuando estamos cerca del final
+      final bloc = context.read<ReceiptsListBloc>();
+      bloc.add(LoadMoreReceipts());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,19 +75,21 @@ class ReceiptsListView extends StatelessWidget {
         child: BlocBuilder<ReceiptsListBloc, ReceiptsListState>(
           builder: (context, state) {
             if (state is ReceiptsListLoading || state is ReceiptsListInitial) {
-              return const Center(child: CircularProgressIndicator());
+              return _ShimmerList();
             }
             if (state is ReceiptsListLoaded) {
               return RefreshIndicator(
                 onRefresh: () async => context.read<ReceiptsListBloc>().add(FetchReceipts()),
                 child: CustomScrollView(
+                  controller: _scroll,
                   slivers: [
                     _buildHeader(context, t),
                     _buildSearchBar(context, t),
+                    _offlineBannerIfNeeded(context),
                     // 2.C ERROR CRÍTICO: Padding ajustado para evitar el OVERFLOW
                     SliverPadding(
                       padding: const EdgeInsets.only(top: 8, bottom: 120), // Espacio generoso para el FAB
-                      sliver: _buildReceiptsList(context, t, state.receipts),
+                      sliver: _buildReceiptsList(context, t, state.receipts, loadingMore: state.loadingMore, hasMore: state.hasMore),
                     ),
                   ],
                 ),
@@ -149,13 +182,55 @@ class ReceiptsListView extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptsList(BuildContext context, AppLocalizations t, List<dynamic> receipts) {
+  Widget _offlineBannerIfNeeded(BuildContext context) {
+    final online = sl<ConnectivityService>().isOnline;
+    final cs = Theme.of(context).colorScheme;
+    if (online) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: cs.errorContainer.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.wifi_off_rounded, color: cs.onErrorContainer),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  AppLocalizations.of(context)!.noConnection,
+                  style: TextStyle(color: cs.onErrorContainer),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReceiptsList(BuildContext context, AppLocalizations t, List<dynamic> receipts, {required bool loadingMore, required bool hasMore}) {
     if (receipts.isEmpty) {
       return SliverFillRemaining(child: Center(child: Text(t.noReceiptsYet)));
     }
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (context, index) {
+          if (index >= receipts.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: loadingMore
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const SizedBox.shrink(),
+              ),
+            );
+          }
           final r = receipts[index];
           final category = (r["category"] ?? t.uncategorized).toString();
           final merchant = (r["merchantName"] ?? "").toString();
@@ -227,9 +302,9 @@ class ReceiptsListView extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          // 1.A JERARQUÍA: Etiqueta "Total"
+                          // 1.A JERARQUÍA: Etiqueta "Total" localizada sin hacks
                           Text(
-                            '${t.totalLabel('')}'.replaceAll(': ', ''),
+                            t.total,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: FlowColors.textSecondary(context)),
                           ),
                           const SizedBox(height: 2),
@@ -247,11 +322,68 @@ class ReceiptsListView extends StatelessWidget {
             ),
           );
         },
-        childCount: receipts.length,
+        childCount: receipts.length + (hasMore || loadingMore ? 1 : 0),
       ),
     );
   }
 
   // 3. NAVEGACIÓN: Barra simplificada y corregida
   
+}
+
+class _ShimmerList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
+      itemCount: 8,
+      itemBuilder: (_, __) => _ShimmerTile(),
+    );
+  }
+}
+
+class _ShimmerTile extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: GlassCard(
+        borderRadius: 20,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: _ShimmerBar(),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShimmerBar extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeInOut,
+      onEnd: () {},
+      builder: (context, t, child) {
+        return Row(
+          children: [
+            Container(width: 42, height: 42, decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12))),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(height: 14, width: double.infinity, decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(6))),
+                  const SizedBox(height: 8),
+                  Container(height: 10, width: MediaQuery.of(context).size.width * 0.5, decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(6))),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

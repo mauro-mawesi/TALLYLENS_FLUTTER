@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:recibos_flutter/core/di/service_locator.dart';
 import 'package:recibos_flutter/core/widgets/glass_card.dart';
 import 'package:recibos_flutter/core/widgets/neon_line_chart.dart';
+import 'package:go_router/go_router.dart';
 import 'bloc/spending_analytics_bloc.dart';
 import 'bloc/spending_analytics_event.dart';
 import 'bloc/spending_analytics_state.dart';
@@ -30,10 +31,17 @@ class _SpendingAnalysisView extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(title: Text(t.spendingAnalysisTitle)),
-      body: BlocBuilder<SpendingAnalyticsBloc, SpendingAnalyticsState>(
+      body: BlocConsumer<SpendingAnalyticsBloc, SpendingAnalyticsState>(
+        listenWhen: (p, c) => c is SpendingAnalyticsUnauthorized,
+        listener: (context, state) {
+          if (state is SpendingAnalyticsUnauthorized) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.sessionExpired)));
+            GoRouter.of(context).go('/unlock');
+          }
+        },
         builder: (context, state) {
           if (state is SpendingAnalyticsLoading || state is SpendingAnalyticsInitial) {
-            return const Center(child: CircularProgressIndicator());
+            return const _SpendingShimmer();
           }
           if (state is SpendingAnalyticsError) {
             return Center(child: Text(t.errorPrefix(state.message)));
@@ -128,6 +136,28 @@ class _SpendingAnalysisView extends StatelessWidget {
           return const SizedBox.shrink();
         },
       ),
+    );
+  }
+}
+
+class _SpendingShimmer extends StatelessWidget {
+  const _SpendingShimmer();
+  @override
+  Widget build(BuildContext context) {
+    Color box(BuildContext c) => Theme.of(c).colorScheme.surfaceVariant.withOpacity(0.5);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(height: 18, width: 160, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(6))),
+        const SizedBox(height: 12),
+        Container(height: 42, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(12))),
+        const SizedBox(height: 12),
+        Container(height: 260, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+        const SizedBox(height: 16),
+        Container(height: 18, width: 140, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(6))),
+        const SizedBox(height: 12),
+        Container(height: 200, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+      ],
     );
   }
 }

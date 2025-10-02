@@ -11,6 +11,8 @@ import 'package:recibos_flutter/features/receipt_detail/bloc/receipt_detail_bloc
 import 'package:recibos_flutter/features/analytics/overview/bloc/analytics_overview_bloc.dart';
 import 'package:recibos_flutter/features/analytics/spending/bloc/spending_analytics_bloc.dart';
 import 'package:recibos_flutter/features/analytics/product_detail/bloc/product_analytics_bloc.dart';
+import 'package:recibos_flutter/core/services/connectivity_service.dart';
+import 'package:recibos_flutter/core/services/privacy_controller.dart';
 
 import 'package:recibos_flutter/features/receipts_list/presentation/bloc/receipts_list_bloc.dart';
 
@@ -34,6 +36,8 @@ void setupServiceLocator() {
   sl.registerLazySingleton(() => AuthService(api: sl()));
   sl.registerLazySingleton(() => LocalAuthService());
   sl.registerLazySingleton(() => LocaleController());
+  sl.registerLazySingleton(() => ConnectivityService()..init());
+  sl.registerLazySingleton(() => PrivacyController());
   // Bridge para manejo global de 401 → logout + redirect
   AuthBridge.onUnauthorized = () async {
     // Manejo centralizado de 401 (lock o logout si no hay refresh / loop)

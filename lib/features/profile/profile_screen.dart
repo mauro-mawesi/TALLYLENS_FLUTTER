@@ -9,6 +9,7 @@ import 'package:recibos_flutter/core/theme/theme_controller.dart';
 import 'package:recibos_flutter/core/widgets/glass_card.dart';
 import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:recibos_flutter/core/services/privacy_controller.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -158,7 +159,7 @@ class ProfileScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  'Security',
+                  t.security,
                   style: TextStyle(
                     color: FlowColors.text(context),
                     fontSize: 16,
@@ -184,6 +185,20 @@ class ProfileScreen extends StatelessWidget {
                       },
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
+                    SwitchListTile(
+                      title: Text(
+                        'Blur en app switcher',
+                        style: TextStyle(color: FlowColors.text(context)),
+                      ),
+                      subtitle: Text('Oculta contenido cuando la app pasa a segundo plano'),
+                      value: sl<PrivacyController>().blurOnBackground,
+                      activeColor: FlowColors.primary,
+                      onChanged: (v) async {
+                        await sl<PrivacyController>().setBlurOnBackground(v);
+                      },
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    // Bloquear capturas (Android) desactivado temporalmente por compatibilidad de plugin.
                     SwitchListTile(
                       title: Text(
                         t.lockOnExit,

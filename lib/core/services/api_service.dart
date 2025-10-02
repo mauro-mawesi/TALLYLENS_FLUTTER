@@ -127,6 +127,8 @@ class ApiService {
     DateTime? dateTo,
     double? minAmount,
     double? maxAmount,
+    int? page,
+    int? limit,
   }) async {
     final qp = <String, String>{
       if (category != null && category.isNotEmpty) 'category': category,
@@ -135,6 +137,8 @@ class ApiService {
       if (dateTo != null) 'dateTo': dateTo.toUtc().toIso8601String(),
       if (minAmount != null) 'minAmount': minAmount.toString(),
       if (maxAmount != null) 'maxAmount': maxAmount.toString(),
+      if (page != null) 'page': page.toString(),
+      if (limit != null) 'limit': limit.toString(),
     };
     final uri = Uri.parse("$_baseUrl/receipts").replace(queryParameters: qp.isEmpty ? null : qp);
     final response = await _authorized(() => http.get(

@@ -26,3 +26,4 @@ class AnalyticsOverviewError extends AnalyticsOverviewState {
   List<Object?> get props => [message];
 }
 
+class AnalyticsOverviewUnauthorized extends AnalyticsOverviewState {}

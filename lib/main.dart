@@ -11,13 +11,18 @@ import 'package:recibos_flutter/core/locale/locale_controller.dart';
 import 'package:recibos_flutter/core/services/api_service.dart';
 import 'package:recibos_flutter/core/services/lock_bridge.dart';
 import 'package:recibos_flutter/core/theme/app_colors.dart';
+import 'package:recibos_flutter/core/services/privacy_controller.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
   setupServiceLocator();
   await themeController.load();
   // Cargar preferencia de idioma antes de iniciar la app
   await sl<LocaleController>().load();
+  // Privacidad
+  await sl<PrivacyController>().load();
   // Propaga el locale al ApiService para enviar X-Locale
   final lc = sl<LocaleController>();
   final api = sl<ApiService>();
@@ -74,8 +79,9 @@ class _MyAppState extends State<MyApp> {
       displayColor: Colors.black87,
     );
 
+    final privacy = sl<PrivacyController>();
     return AnimatedBuilder(
-      animation: Listenable.merge([themeController, sl<LocaleController>()]),
+      animation: Listenable.merge([themeController, sl<LocaleController>(), privacy]),
       builder: (context, _) => MaterialApp.router(
       title: AppLocalizations.of(context)?.appTitle ?? 'Receipts App',
       debugShowCheckedModeBanner: false,
@@ -91,6 +97,10 @@ class _MyAppState extends State<MyApp> {
           Locale('es'),
           Locale('nl'),
         ],
+        builder: (context, child) => Stack(children: [
+          if (child != null) child,
+          BlurOverlay(controller: privacy),
+        ]),
         theme: () {
           final lightCS = const ColorScheme.light(
             primary: FlowColors.primary,
@@ -341,9 +351,12 @@ class _LifecycleHandlerSmart with WidgetsBindingObserver {
   _LifecycleHandlerSmart({required this.auth, required this.onBackground, required this.shouldLockOnResume});
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final privacy = sl<PrivacyController>();
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       onBackground();
+      privacy.onAppPaused();
     } else if (state == AppLifecycleState.resumed) {
+      privacy.onAppResumed();
       if (shouldLockOnResume()) {
         auth.forceLock();
       }

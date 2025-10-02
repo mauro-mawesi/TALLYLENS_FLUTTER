@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:recibos_flutter/core/services/api_service.dart';
 import 'spending_analytics_event.dart';
 import 'spending_analytics_state.dart';
+import 'package:recibos_flutter/core/services/errors.dart';
 
 class SpendingAnalyticsBloc extends Bloc<SpendingAnalyticsEvent, SpendingAnalyticsState> {
   final ApiService api;
@@ -15,8 +16,11 @@ class SpendingAnalyticsBloc extends Bloc<SpendingAnalyticsEvent, SpendingAnalyti
       final data = await api.getSpendingAnalysis(months: event.months);
       emit(SpendingAnalyticsLoaded(data: data, months: event.months));
     } catch (e) {
-      emit(SpendingAnalyticsError(e.toString()));
+      if (e is UnauthorizedException) {
+        emit(SpendingAnalyticsUnauthorized());
+      } else {
+        emit(SpendingAnalyticsError(e.toString()));
+      }
     }
   }
 }
-

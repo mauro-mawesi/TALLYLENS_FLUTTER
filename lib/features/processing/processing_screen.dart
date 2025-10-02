@@ -7,6 +7,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:recibos_flutter/core/services/receipt_service.dart';
 import 'dart:io';
 import 'package:recibos_flutter/core/services/errors.dart';
+import 'package:recibos_flutter/core/services/connectivity_service.dart';
 
 class ProcessingScreen extends StatefulWidget {
   final String? receiptId;
@@ -26,6 +27,9 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   Timer? _timer;
   Timer? _msgTimer;
   late final AnimationController _controller;
+  int _backoffSec = 2;
+  static const int _maxBackoffSec = 30;
+  static const Duration _overallTimeout = Duration(minutes: 5);
 
   String _statusText = '';
   int _step = 0;
@@ -37,12 +41,14 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   String? _errorMessage;
   DateTime? _pollStartedAt;
   bool _didBoot = false;
+  late final ConnectivityService _conn;
 
   @override
   void initState() {
     super.initState();
     _api = sl<ApiService>();
     _receiptService = sl<ReceiptService>();
+    _conn = sl<ConnectivityService>();
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -135,35 +141,60 @@ class _ProcessingScreenState extends State<ProcessingScreen>
     _hasError = false;
     _errorMessage = null;
     _pollStartedAt = DateTime.now();
-    _poll();
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _poll());
+    _backoffSec = 2;
+    _scheduleNextPoll(immediate: true);
   }
 
   Future<void> _poll() async {
     try {
       final id = _receiptId;
       if (id == null || id.isEmpty) return;
+      // Offline: esperar reconexión sin insistir
+      if (!_conn.isOnline) {
+        _scheduleNextPoll(immediate: false, offline: true);
+        return;
+      }
+      // Overall timeout
+      if (_pollStartedAt != null && DateTime.now().difference(_pollStartedAt!) > _overallTimeout) {
+        if (mounted) {
+          setState(() {
+            _hasError = true; _errorMessage = AppLocalizations.of(context)?.errorGeneric ?? 'Timeout while processing';
+          });
+        }
+        return;
+      }
       final data = await _api.getReceiptById(id);
       final status = (data['processingStatus'] ?? data['processing_status'] ?? '').toString();
       if (status == 'completed') {
         _finish(data);
+        return;
       }
-      if (_pollStartedAt != null && DateTime.now().difference(_pollStartedAt!).inSeconds > 120) {
-        // Mantén mensaje de analizando si tarda
-        if (mounted) {
-          final t = AppLocalizations.of(context);
-          setState(() { _statusText = t?.processingAnalyzing ?? 'Analyzing your receipt...'; });
-        }
-      }
+      // Reset backoff en respuesta exitosa
+      _backoffSec = 2;
+      final t = AppLocalizations.of(context);
+      if (mounted) setState(() { _statusText = t?.processingAnalyzing ?? 'Analyzing your receipt...'; });
+      _scheduleNextPoll();
     } catch (e) {
       if (e is UnauthorizedException) {
         _timer?.cancel();
         return;
       }
+      // Error de red u otro: aplicar backoff exponencial
+      _backoffSec = (_backoffSec * 2).clamp(2, _maxBackoffSec);
+      _scheduleNextPoll();
       if (mounted) {
         setState(() { _hasError = true; _errorMessage = e.toString(); });
       }
     }
+  }
+
+  void _scheduleNextPoll({bool immediate = false, bool offline = false}) {
+    _timer?.cancel();
+    Duration d;
+    if (immediate) d = Duration.zero;
+    else if (offline) d = const Duration(seconds: 3);
+    else d = Duration(seconds: _backoffSec);
+    _timer = Timer(d, _poll);
   }
 
   void _finish(Map<String, dynamic> receipt) {

@@ -25,3 +25,4 @@ class SpendingAnalyticsError extends SpendingAnalyticsState {
   List<Object?> get props => [message];
 }
 
+class SpendingAnalyticsUnauthorized extends SpendingAnalyticsState {}

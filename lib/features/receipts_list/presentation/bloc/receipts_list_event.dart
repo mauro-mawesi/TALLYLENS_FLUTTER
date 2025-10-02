@@ -28,3 +28,5 @@ class FetchReceipts extends ReceiptsListEvent {
     amountRange?.end ?? 0,
   ];
 }
+
+class LoadMoreReceipts extends ReceiptsListEvent {}

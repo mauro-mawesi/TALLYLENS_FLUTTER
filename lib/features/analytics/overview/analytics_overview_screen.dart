@@ -34,10 +34,19 @@ class _AnalyticsOverviewView extends StatelessWidget {
     final name = sl<AuthService>().displayName ?? '';
     return Scaffold(
       appBar: AppBar(title: Text(t.greeting(name))),
-      body: BlocBuilder<AnalyticsOverviewBloc, AnalyticsOverviewState>(
+      body: BlocConsumer<AnalyticsOverviewBloc, AnalyticsOverviewState>(
+        listenWhen: (p, c) => c is AnalyticsOverviewUnauthorized,
+        listener: (context, state) {
+          if (state is AnalyticsOverviewUnauthorized) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(AppLocalizations.of(context)!.sessionExpired)),
+            );
+            context.go('/unlock');
+          }
+        },
         builder: (context, state) {
           if (state is AnalyticsOverviewLoading || state is AnalyticsOverviewInitial) {
-            return const Center(child: CircularProgressIndicator());
+            return const _OverviewShimmer();
           }
           if (state is AnalyticsOverviewError) {
             return Center(child: Text(t.errorPrefix(state.message)));
@@ -188,6 +197,22 @@ class _AnalyticsOverviewView extends StatelessWidget {
           return const SizedBox.shrink();
         },
       ),
+    );
+  }
+}
+
+class _OverviewShimmer extends StatelessWidget {
+  const _OverviewShimmer();
+  @override
+  Widget build(BuildContext context) {
+    Color box(BuildContext c) => Theme.of(c).colorScheme.surfaceVariant.withOpacity(0.5);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(height: 140, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+        const SizedBox(height: 16),
+        Container(height: 220, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+      ],
     );
   }
 }

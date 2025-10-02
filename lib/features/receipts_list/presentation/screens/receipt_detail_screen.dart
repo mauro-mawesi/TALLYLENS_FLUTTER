@@ -8,6 +8,10 @@ import 'package:recibos_flutter/core/models/receipt.dart';
 import 'package:recibos_flutter/core/models/receipt_item.dart';
 import 'package:recibos_flutter/core/services/api_service.dart';
 import 'package:recibos_flutter/core/widgets/glass_card.dart';
+import 'package:recibos_flutter/core/services/pdf_service.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:recibos_flutter/features/receipt_detail/bloc/receipt_detail_bloc.dart';
 import 'package:recibos_flutter/features/receipt_detail/bloc/receipt_detail_event.dart';
@@ -52,6 +56,26 @@ class _ReceiptDetailView extends StatelessWidget {
           },
         ),
         actions: [
+          IconButton(
+            tooltip: 'Export',
+            icon: const Icon(Icons.ios_share_outlined),
+            onPressed: () async {
+              final st = context.read<ReceiptDetailBloc>().state;
+              if (st is! ReceiptDetailLoaded) return;
+              final receipt = st.receipt;
+              final items = st.items;
+              final pdf = await PdfService().buildReceiptPdf(
+                receipt: receipt,
+                items: items,
+                locale: Localizations.localeOf(context),
+              );
+              final dir = await getTemporaryDirectory();
+              final path = '${dir.path}/receipt_${receipt.id}.pdf';
+              final f = File(path);
+              await f.writeAsBytes(pdf, flush: true);
+              await Share.shareXFiles([XFile(f.path)], subject: 'Receipt ${receipt.id}');
+            },
+          ),
           IconButton(
             tooltip: t.editReceiptTitle,
             icon: const Icon(Icons.edit_outlined),

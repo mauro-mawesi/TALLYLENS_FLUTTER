@@ -50,7 +50,7 @@ class _ProductDetailView extends StatelessWidget {
         child: BlocBuilder<ProductAnalyticsBloc, ProductAnalyticsState>(
           builder: (context, state) {
             if (state is ProductAnalyticsLoading || state is ProductAnalyticsInitial) {
-              return const Center(child: CircularProgressIndicator());
+              return const _ProductShimmer();
             }
             if (state is ProductAnalyticsError) {
               return Center(child: Text(t.errorPrefix(state.message)));
@@ -197,6 +197,30 @@ class _ProductDetailView extends StatelessWidget {
         },
       ),
     ),
+    );
+  }
+}
+
+class _ProductShimmer extends StatelessWidget {
+  const _ProductShimmer();
+  @override
+  Widget build(BuildContext context) {
+    Color box(BuildContext c) => Theme.of(c).colorScheme.surfaceVariant.withOpacity(0.5);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Header card
+        Container(height: 72, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+        const SizedBox(height: 16),
+        // Monthly price trend
+        Container(height: 220, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+        const SizedBox(height: 16),
+        // Price comparison list
+        Container(height: 200, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+        const SizedBox(height: 16),
+        // Frequency block
+        Container(height: 160, decoration: BoxDecoration(color: box(context), borderRadius: BorderRadius.circular(20))),
+      ],
     );
   }
 }
