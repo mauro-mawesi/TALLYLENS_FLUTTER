@@ -3,6 +3,7 @@ import 'package:recibos_flutter/core/di/service_locator.dart';
 import 'package:recibos_flutter/core/services/auth_service.dart';
 import 'package:recibos_flutter/core/locale/locale_controller.dart';
 import 'package:recibos_flutter/core/services/api_service.dart';
+import 'package:recibos_flutter/core/services/auth_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:recibos_flutter/core/theme/theme_controller.dart';
@@ -362,6 +363,11 @@ class _LangTile extends StatelessWidget {
       onTap: () {
         sl<LocaleController>().setLocale(Locale(code));
         sl<ApiService>().setLocaleCode(code);
+        final auth = sl<AuthService>();
+        if (auth.isLoggedIn) {
+          // Persistir preferencia en backend de forma silenciosa
+          sl<ApiService>().updatePreferredLanguage(code);
+        }
       },
     );
   }

@@ -59,11 +59,11 @@ class _FiltersSheetState extends State<FiltersSheet> {
             DropdownButtonFormField<String>(
               value: _category,
               items: [
-                DropdownMenuItem(value: 'market', child: Text(t.categoryMarket)),
+                DropdownMenuItem(value: 'grocery', child: Text(t.categoryMarket)),
                 DropdownMenuItem(value: 'transport', child: Text(t.categoryTransport)),
                 DropdownMenuItem(value: 'food', child: Text(t.categoryFood)),
                 DropdownMenuItem(value: 'fuel', child: Text(t.categoryFuel)),
-                DropdownMenuItem(value: 'other', child: Text(t.categoryOther)),
+                DropdownMenuItem(value: 'others', child: Text(t.categoryOther)),
               ],
               decoration: InputDecoration(labelText: t.categoryLabel),
               onChanged: (v) => setState(() => _category = v),

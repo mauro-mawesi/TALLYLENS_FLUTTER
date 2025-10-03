@@ -5,3 +5,15 @@ class UnauthorizedException implements Exception {
   String toString() => 'UnauthorizedException: $message';
 }
 
+class DuplicateReceiptException implements Exception {
+  final String message;
+  final String? duplicateType;
+  final Map<String, dynamic>? existingReceipt;
+  DuplicateReceiptException({
+    this.message = 'Duplicate receipt detected',
+    this.duplicateType,
+    this.existingReceipt,
+  });
+  @override
+  String toString() => 'DuplicateReceiptException: $message';
+}

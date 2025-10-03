@@ -163,4 +163,9 @@
   "lastPurchase": "Laatste aankoop",
   "daysSinceLast": "Dagen sinds laatste",
   "nextPurchasePrediction": "Volgende aankoop voorspelling"
+  ,
+  "duplicateDetectedTitle": "Mogelijk duplicaat",
+  "duplicateDetectedMessage": "Dit bonnetje lijkt een duplicaat. Wat wil je doen?",
+  "viewExisting": "Bestaande bekijken",
+  "createAnyway": "Toch aanmaken"
 }

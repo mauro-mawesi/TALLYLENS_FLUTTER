@@ -1,6 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
-import 'package:http/http.dart' as http;
+// http replaced by Dio for all requests
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:recibos_flutter/core/config/app_config.dart';
 import 'package:recibos_flutter/core/services/errors.dart';
 import 'package:recibos_flutter/core/services/auth_bridge.dart';
@@ -19,17 +20,78 @@ class ApiService {
   // Base URL configurable
   static const String _baseUrl = baseApiUrl;
 
+  late final Dio _dio;
+
+  ApiService() {
+    _dio = Dio(BaseOptions(
+      baseUrl: _baseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {'Content-Type': 'application/json'},
+    ));
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        if (_accessToken != null && _accessToken!.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $_accessToken';
+        }
+        options.headers['X-Locale'] = _localeCode;
+        handler.next(options);
+      },
+      onError: (err, handler) async {
+        // Evitar ciclo con el endpoint de refresh
+        final isRefresh = err.requestOptions.path.endsWith('/auth/refresh');
+        if (err.response?.statusCode == 401 && !isRefresh && _refreshToken != null && _refreshToken!.isNotEmpty) {
+          final ok = await _refresh();
+          if (ok) {
+            try {
+              final res = await _dio.fetch(err.requestOptions);
+              return handler.resolve(res);
+            } catch (_) {}
+          } else {
+            final cb = AuthBridge.onRefreshFailed;
+            if (cb != null) await cb();
+          }
+        }
+        handler.next(err);
+      },
+    ));
+    // Logging de red (solo en no-release), sin cuerpos ni headers sensibles
+    if (!kReleaseMode) {
+      _dio.interceptors.add(LogInterceptor(
+        request: true,
+        requestHeader: false,
+        requestBody: false,
+        responseHeader: false,
+        responseBody: false,
+      ));
+    }
+  }
+
+  Future<Response<dynamic>> _request(Future<Response<dynamic>> Function() fn) async {
+    try {
+      return await fn();
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 401) {
+        final cb = AuthBridge.onUnauthorized;
+        if (cb != null) await cb();
+        throw UnauthorizedException('Sesión expirada');
+      }
+      throw Exception(e.message);
+    }
+  }
+
   void setAccessToken(String? token) { _accessToken = token; }
   void setRefreshToken(String? token) { _refreshToken = token; }
   void setTokens({String? access, String? refresh}) { _accessToken = access; _refreshToken = refresh; }
   void setLocaleCode(String? code) { if (code != null && code.isNotEmpty) _localeCode = code; }
 
   Map<String, String> _headers({Map<String, String>? extra}) {
+    // Conservado por compatibilidad en _refresh anterior; el resto usa interceptores.
     final headers = <String, String>{
       'Content-Type': 'application/json',
       if (_accessToken != null && _accessToken!.isNotEmpty)
         'Authorization': 'Bearer $_accessToken',
-      // Sincroniza idioma con backend
       'X-Locale': _localeCode,
     };
     if (extra != null) headers.addAll(extra);
@@ -38,24 +100,7 @@ class ApiService {
 
   // _localeCode se gestiona externamente a través de setLocaleCode
 
-  /// Obtiene la lista de todos los recibos.
-  Future<http.Response> _authorized(Future<http.Response> Function() doRequest) async {
-    http.Response resp = await doRequest();
-    if (resp.statusCode == 401 && _refreshToken != null && _refreshToken!.isNotEmpty) {
-      final ok = await _refresh();
-      if (ok) {
-        resp = await doRequest();
-      }
-    }
-    if (resp.statusCode == 401) {
-      // Notificamos globalmente y dejamos que el router redirija
-      final cb = AuthBridge.onUnauthorized;
-      if (cb != null) {
-        await cb();
-      }
-    }
-    return resp;
-  }
+  // Todas las llamadas pasan por Dio + interceptor; _authorized ya no es necesario.
 
   Future<bool> _refresh() async {
     final now = DateTime.now().toUtc();
@@ -67,13 +112,11 @@ class ApiService {
     }
     Future<bool> doRefresh() async {
       _lastRefreshAttempt = DateTime.now().toUtc();
-      final r = await http.post(
-        Uri.parse("$_baseUrl/auth/refresh"),
-        headers: _headers(),
-        body: json.encode({'refreshToken': _refreshToken}),
-      );
+      final r = await _dio.post('/auth/refresh',
+          data: {'refreshToken': _refreshToken},
+          options: Options(validateStatus: (code) => true));
       if (r.statusCode == 200) {
-        final data = json.decode(r.body);
+        final data = r.data;
         final tokens = data['data']?['tokens'];
         final newAccess = tokens?['accessToken'] as String?;
         final newRefresh = tokens?['refreshToken'] as String?;
@@ -102,6 +145,11 @@ class ApiService {
         backoff = Duration(seconds: 5 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
       }
       _refreshCooldownUntil = DateTime.now().toUtc().add(backoff);
+      // Logout inmediato si el refresh es inválido
+      if (r.statusCode == 401 || r.statusCode == 400) {
+        final cb = AuthBridge.onRefreshFailed;
+        if (cb != null) await cb();
+      }
       return false;
     }
     try {
@@ -130,6 +178,10 @@ class ApiService {
     int? page,
     int? limit,
   }) async {
+    int? offset;
+    if (page != null && limit != null) {
+      offset = ((page - 1) * limit).clamp(0, 1 << 31);
+    }
     final qp = <String, String>{
       if (category != null && category.isNotEmpty) 'category': category,
       if (merchant != null && merchant.isNotEmpty) 'merchant': merchant,
@@ -137,16 +189,12 @@ class ApiService {
       if (dateTo != null) 'dateTo': dateTo.toUtc().toIso8601String(),
       if (minAmount != null) 'minAmount': minAmount.toString(),
       if (maxAmount != null) 'maxAmount': maxAmount.toString(),
-      if (page != null) 'page': page.toString(),
       if (limit != null) 'limit': limit.toString(),
+      if (offset != null) 'offset': offset.toString(),
     };
-    final uri = Uri.parse("$_baseUrl/receipts").replace(queryParameters: qp.isEmpty ? null : qp);
-    final response = await _authorized(() => http.get(
-      uri,
-      headers: _headers(),
-    ));
+    final response = await _request(() => _dio.get('/receipts', queryParameters: qp.isEmpty ? null : qp));
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = response.data;
       // Backend responde { status, data: { receipts, total, ... } }
       final list = (data["data"]?["receipts"]) as List<dynamic>?;
       if (list == null) {
@@ -154,20 +202,15 @@ class ApiService {
       }
       return list;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception("Error al obtener recibos: ${response.statusCode}");
   }
 
   // Receipt detail and items
   Future<Map<String, dynamic>> getReceiptById(String id) async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/receipts/$id"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/receipts/$id'));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error al obtener recibo: ${response.statusCode}');
   }
 
@@ -186,27 +229,18 @@ class ApiService {
       if (amount != null) 'amount': amount,
       if (purchaseDate != null) 'purchaseDate': purchaseDate.toUtc().toIso8601String(),
     };
-    final response = await _authorized(() => http.patch(
-          Uri.parse("$_baseUrl/receipts/$id"),
-          headers: _headers(),
-          body: json.encode(payload),
-        ));
+    final response = await _request(() => _dio.patch('/receipts/$id', data: payload));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
-    throw Exception('Error al actualizar recibo: ${response.body}');
+    throw Exception('Error al actualizar recibo: ${response.data}');
   }
 
   Future<List<dynamic>> getReceiptItems(String id) async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/receipts/$id/items"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/receipts/$id/items'));
     if (response.statusCode == 200) {
-      return (json.decode(response.body)['data'] as List<dynamic>);
+      return (response.data['data'] as List<dynamic>);
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error al obtener items: ${response.statusCode}');
   }
 
@@ -222,70 +256,90 @@ class ApiService {
       if (unitPrice != null) 'unitPrice': unitPrice,
       if (isVerified != null) 'isVerified': isVerified,
     };
-    final response = await _authorized(() => http.patch(
-          Uri.parse("$_baseUrl/receipts/$receiptId/items/$itemId"),
-          headers: _headers(),
-          body: json.encode(payload),
-        ));
+    final response = await _request(() => _dio.patch('/receipts/$receiptId/items/$itemId', data: payload));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
-    throw Exception('Error al actualizar item: ${response.body}');
+    throw Exception('Error al actualizar item: ${response.data}');
   }
 
   /// Crea un nuevo registro de recibo a partir de una URL de imagen.
   /// Opcionalmente puede indicar si la imagen ya fue procesada por ML Kit y su origen.
   Future<Map<String, dynamic>> createReceipt(
-    String imageUrl, { bool? processedByMLKit, String? source }
+    String imageUrl, { bool? processedByMLKit, String? source, bool? forceDuplicate }
   ) async {
     final payload = <String, dynamic>{
       "imageUrl": imageUrl,
       if (processedByMLKit != null) "processedByMLKit": processedByMLKit,
       if (source != null) "source": source,
+      if (forceDuplicate != null) "forceDuplicate": forceDuplicate,
     };
-    final response = await _authorized(() => http.post(
-      Uri.parse("$_baseUrl/receipts"),
-      headers: _headers(),
-      body: json.encode(payload),
-    ));
-
-    if (response.statusCode == 201) {
-      return json.decode(response.body);
+    try {
+      final response = await _dio.post('/receipts', data: payload);
+      if (response.statusCode == 201) {
+        return response.data;
+      }
+      throw Exception("Error al crear recibo: ${response.statusCode}");
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 409) {
+        final data = e.response?.data;
+        String message = 'Duplicate receipt';
+        String? duplicateType;
+        Map<String, dynamic>? existingReceipt;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is String) message = msg;
+          final inner = data['data'];
+          if (inner is Map) {
+            final dt = inner['duplicateType'];
+            if (dt is String) duplicateType = dt;
+            final er = inner['existingReceipt'];
+            if (er is Map) {
+              existingReceipt = er.cast<String, dynamic>();
+            }
+          }
+        }
+        throw DuplicateReceiptException(
+          message: message,
+          duplicateType: duplicateType,
+          existingReceipt: existingReceipt,
+        );
+      }
+      if (code == 401) {
+        final cb = AuthBridge.onUnauthorized;
+        if (cb != null) await cb();
+        throw UnauthorizedException('Sesión expirada');
+      }
+      throw Exception(e.message);
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
-    throw Exception("Error al crear recibo: ${response.body}");
   }
 
   /// Sube un archivo de imagen y devuelve la URL pública.
   Future<String> uploadImage(File imageFile) async {
-    final uri = Uri.parse("$_baseUrl/upload");
-    Future<http.StreamedResponse> send() async {
-      final req = http.MultipartRequest("POST", uri)
-        ..files.add(await http.MultipartFile.fromPath("file", imageFile.path));
-      if (_accessToken != null && _accessToken!.isNotEmpty) {
-        req.headers['Authorization'] = 'Bearer $_accessToken';
-      }
-      return req.send();
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(imageFile.path),
+    });
+    final resp = await _request(() => _dio.post('/upload', data: form));
+    if (resp.statusCode == 200) {
+      return (resp.data['image_url'] as String);
     }
+    if (resp.statusCode == 401) throw UnauthorizedException('Sesión expirada');
+    throw Exception('Error en la subida de imagen: ${resp.statusCode}');
+  }
 
-    var response = await send();
-    if (response.statusCode == 401 && await _refresh()) {
-      response = await send();
-    }
-    if (response.statusCode == 401) {
-      final cb = AuthBridge.onUnauthorized;
-      if (cb != null) await cb();
-      throw UnauthorizedException('Sesión expirada');
-    }
-    final body = await response.stream.bytesToString();
+  /// Persistir preferencia de idioma en backend (silencioso en caso de error)
+  Future<void> updatePreferredLanguage(String code) async {
+    try {
+      await _dio.put('/auth/language', data: {'language': code});
+    } catch (_) {}
+  }
 
-    if (response.statusCode == 200) {
-      final data = json.decode(body);
-      return data["image_url"] as String;
-    } else {
-      throw Exception("Error en la subida de imagen: ${response.statusCode} - $body");
-    }
+  /// Revocar refresh token en backend al hacer logout
+  Future<void> revokeRefreshToken(String refreshToken) async {
+    try {
+      await _dio.post('/auth/logout', data: {'refreshToken': refreshToken});
+    } catch (_) {}
   }
 
   // --- Auth endpoints (opcional) ---
@@ -295,20 +349,16 @@ class ApiService {
       if (username != null) 'username': username,
       'password': password,
     };
-    final resp = await http.post(
-      Uri.parse("$_baseUrl/auth/login"),
-      headers: _headers(),
-      body: json.encode(payload),
-    );
+    final resp = await _request(() => _dio.post('/auth/login', data: payload));
     if (resp.statusCode == 200) {
-      final data = json.decode(resp.body);
+      final data = resp.data;
       final tokens = data['data']?['tokens'];
       if (tokens != null) {
         setTokens(access: tokens['accessToken'] as String?, refresh: tokens['refreshToken'] as String?);
       }
       return data;
     }
-    throw Exception('Login failed: ${resp.body}');
+    throw Exception('Login failed: ${resp.data}');
   }
 
   Future<Map<String, dynamic>> register({
@@ -325,105 +375,73 @@ class ApiService {
       if (firstName != null && firstName.isNotEmpty) 'firstName': firstName,
       if (lastName != null && lastName.isNotEmpty) 'lastName': lastName,
     };
-    final resp = await http.post(
-      Uri.parse("$_baseUrl/auth/register"),
-      headers: _headers(),
-      body: json.encode(payload),
-    );
+    final resp = await _request(() => _dio.post('/auth/register', data: payload));
     if (resp.statusCode == 201) {
-      final data = json.decode(resp.body);
+      final data = resp.data;
       final tokens = data['data']?['tokens'];
       if (tokens != null) {
         setTokens(access: tokens['accessToken'] as String?, refresh: tokens['refreshToken'] as String?);
       }
       return data;
     }
-    throw Exception('Register failed: ${resp.body}');
+    throw Exception('Register failed: ${resp.data}');
   }
 
   Future<Map<String, dynamic>> getMeRaw() async {
-    final resp = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/auth/me"),
-          headers: _headers(),
-        ));
+    final resp = await _request(() => _dio.get('/auth/me'));
     if (resp.statusCode == 200) {
-      return json.decode(resp.body)['data'] as Map<String, dynamic>;
+      return resp.data['data'] as Map<String, dynamic>;
     }
-    if (resp.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error perfil: ${resp.statusCode}');
   }
 
   Future<Map<String, dynamic>> getReceiptImageInfo(String receiptId) async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/images/receipt/$receiptId/info"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/images/receipt/$receiptId/info'));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error imagen info: ${response.statusCode}');
   }
 
   // --- Analytics endpoints ---
   Future<Map<String, dynamic>> getSmartAlerts() async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/analytics/smart-alerts"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/analytics/smart-alerts'));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error smart alerts: ${response.statusCode}');
   }
 
   Future<Map<String, dynamic>> getSpendingAnalysis({int months = 6}) async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/analytics/spending-analysis?months=$months"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/analytics/spending-analysis', queryParameters: {'months': months}));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error spending analysis: ${response.statusCode}');
   }
 
   // --- Product analytics ---
   Future<Map<String, dynamic>> getProductMonthlyStats(String productId, {int months = 12}) async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/analytics/products/$productId/monthly-stats?months=$months"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/analytics/products/$productId/monthly-stats', queryParameters: {'months': months}));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error product monthly stats: ${response.statusCode}');
   }
 
   Future<Map<String, dynamic>> getProductPriceComparison(String productId, {int days = 90}) async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/analytics/products/$productId/price-comparison?days=$days"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/analytics/products/$productId/price-comparison', queryParameters: {'days': days}));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error product price comparison: ${response.statusCode}');
   }
 
   Future<Map<String, dynamic>> getProductFrequencyAnalysis(String productId) async {
-    final response = await _authorized(() => http.get(
-          Uri.parse("$_baseUrl/analytics/products/$productId/frequency-analysis"),
-          headers: _headers(),
-        ));
+    final response = await _request(() => _dio.get('/analytics/products/$productId/frequency-analysis'));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['data'] as Map<String, dynamic>;
+      return response.data['data'] as Map<String, dynamic>;
     }
-    if (response.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error product frequency: ${response.statusCode}');
   }
 }

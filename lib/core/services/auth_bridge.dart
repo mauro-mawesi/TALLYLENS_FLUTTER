@@ -4,4 +4,6 @@ typedef TokensUpdated = Future<void> Function(String? accessToken, String? refre
 class AuthBridge {
   static VoidAsync? onUnauthorized;
   static TokensUpdated? onTokensUpdated;
+  // Se invoca cuando el refresh de tokens falla (401/invalid)
+  static VoidAsync? onRefreshFailed;
 }

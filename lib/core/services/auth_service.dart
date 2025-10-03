@@ -107,6 +107,12 @@ class AuthService with ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final refresh = _refreshToken;
+    try {
+      if (refresh != null && refresh.isNotEmpty) {
+        await _api.revokeRefreshToken(refresh);
+      }
+    } catch (_) {}
     _accessToken = null;
     _refreshToken = null;
     _locked = false;

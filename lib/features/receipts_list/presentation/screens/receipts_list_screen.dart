@@ -50,12 +50,14 @@ class ReceiptsListView extends StatefulWidget {
 class _ReceiptsListViewState extends State<ReceiptsListView> {
   final ScrollController _scroll = ScrollController();
   Map<String, dynamic>? _currentFilters;
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
     _currentFilters = widget.initialFilters;
+    _searchCtrl.addListener(() => setState(() {}));
   }
 
   void _onScroll() {
@@ -72,6 +74,7 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
   @override
   void dispose() {
     _scroll.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -130,18 +133,7 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
           tooltip: t.filtersTitle,
           icon: const Icon(Icons.filter_alt_outlined),
           onPressed: () async {
-            final res = await showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              builder: (ctx) => Padding(
-                padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-                child: const FiltersSheet(),
-              ),
-            );
+            final res = await _openFilters(context);
             if (res is ReceiptsFilter) {
               // Aplica filtros
               // ignore: use_build_context_synchronously
@@ -151,6 +143,14 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
                 dateRange: res.dateRange,
                 amountRange: res.amountRange,
               ));
+              setState(() {
+                _currentFilters = {
+                  'category': res.category,
+                  'merchant': res.merchant,
+                  'dateRange': res.dateRange,
+                  'amountRange': res.amountRange,
+                };
+              });
             }
           },
         ),
@@ -183,14 +183,79 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
           borderRadius: 24,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: TextField(
+            controller: _searchCtrl,
             style: Theme.of(context).textTheme.bodyLarge,
-            decoration: const InputDecoration(
+            onSubmitted: (value) {
+              final v = value.trim();
+              final existingMerchant = (_currentFilters != null)
+                  ? _currentFilters!['merchant'] as String?
+                  : null;
+              final nextMerchant = v.isEmpty ? existingMerchant : v;
+              context.read<ReceiptsListBloc>().add(FetchReceipts(
+                category: _currentFilters?['category'] as String?,
+                merchant: nextMerchant,
+                dateRange: _currentFilters?['dateRange'] as DateTimeRange?,
+                amountRange: _currentFilters?['amountRange'] as RangeValues?,
+              ));
+              setState(() {
+                _currentFilters = {
+                  'category': _currentFilters?['category'],
+                  'merchant': nextMerchant,
+                  'dateRange': _currentFilters?['dateRange'],
+                  'amountRange': _currentFilters?['amountRange'],
+                };
+              });
+            },
+            decoration: InputDecoration(
               isDense: true,
               border: InputBorder.none,
-              prefixIcon: Icon(Icons.search),
-              suffixIcon: Icon(Icons.mic_none),
-              hintText: '',
-            ).copyWith(hintText: t.searchHint),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_searchCtrl.text.isNotEmpty)
+                    IconButton(
+                      tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        context.read<ReceiptsListBloc>().add(FetchReceipts(
+                          category: _currentFilters?['category'] as String?,
+                          merchant: _currentFilters?['merchant'] as String?,
+                          dateRange: _currentFilters?['dateRange'] as DateTimeRange?,
+                          amountRange: _currentFilters?['amountRange'] as RangeValues?,
+                        ));
+                      },
+                    )
+                  else
+                    IconButton(
+                      tooltip: t.filtersTitle,
+                      icon: const Icon(Icons.tune),
+                      onPressed: () async {
+                        final res = await _openFilters(context);
+                        if (res is ReceiptsFilter) {
+                          // ignore: use_build_context_synchronously
+                          context.read<ReceiptsListBloc>().add(FetchReceipts(
+                            category: res.category,
+                            merchant: res.merchant,
+                            dateRange: res.dateRange,
+                            amountRange: res.amountRange,
+                          ));
+                          setState(() {
+                            _currentFilters = {
+                              'category': res.category,
+                              'merchant': res.merchant,
+                              'dateRange': res.dateRange,
+                              'amountRange': res.amountRange,
+                            };
+                          });
+                        }
+                      },
+                    ),
+                ],
+              ),
+              hintText: t.searchHint,
+            ),
           ),
         ),
       ),
@@ -363,6 +428,21 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
 
   // 3. NAVEGACIÓN: Barra simplificada y corregida
   
+}
+
+Future<dynamic> _openFilters(BuildContext context) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: const FiltersSheet(),
+    ),
+  );
 }
 
 class _ShimmerList extends StatelessWidget {

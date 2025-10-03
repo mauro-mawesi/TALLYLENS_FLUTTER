@@ -163,4 +163,9 @@
   "lastPurchase": "Última compra",
   "daysSinceLast": "Días desde la última",
   "nextPurchasePrediction": "Próxima compra estimada"
+  ,
+  "duplicateDetectedTitle": "Posible duplicado",
+  "duplicateDetectedMessage": "Este recibo parece un duplicado. ¿Qué deseas hacer?",
+  "viewExisting": "Ver existente",
+  "createAnyway": "Crear de todos modos"
 }

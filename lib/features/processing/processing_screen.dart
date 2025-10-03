@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recibos_flutter/core/di/service_locator.dart';
 import 'package:recibos_flutter/core/services/api_service.dart';
+import 'package:recibos_flutter/core/services/errors.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:recibos_flutter/core/services/receipt_service.dart';
 import 'dart:io';
@@ -117,7 +118,6 @@ class _ProcessingScreenState extends State<ProcessingScreen>
             : <String, dynamic>{};
         final id = (data['id'] ?? '').toString();
         if (id.isNotEmpty) {
-          // empezamos a hacer polling
           setState(() {
             _receiptId = id;
             final t2 = AppLocalizations.of(context);
@@ -126,6 +126,66 @@ class _ProcessingScreenState extends State<ProcessingScreen>
           _startPolling();
           return;
         }
+      } on DuplicateReceiptException catch (e) {
+        // Ofrecer opciones: ver existente o crear de todos modos
+        if (!mounted) return;
+        final existingId = e.existingReceipt?['id']?.toString();
+        final choice = await showDialog<String>(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) {
+            final cs = Theme.of(ctx).colorScheme;
+            return AlertDialog(
+              title: Text(AppLocalizations.of(ctx)?.duplicateDetectedTitle ?? 'Possible duplicate'),
+              content: Text(AppLocalizations.of(ctx)?.duplicateDetectedMessage ?? 'This receipt appears to be a duplicate. What would you like to do?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop('view'),
+                  child: Text(AppLocalizations.of(ctx)?.viewExisting ?? 'View existing'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop('force'),
+                  child: Text(AppLocalizations.of(ctx)?.createAnyway ?? 'Create anyway'),
+                ),
+              ],
+            );
+          },
+        );
+        if (!mounted) return;
+        if (choice == 'view' && existingId != null && existingId.isNotEmpty) {
+          context.pushReplacement('/detalle', extra: {'id': existingId});
+          return;
+        }
+        if (choice == 'force') {
+          try {
+            final file = File(widget.uploadPath!);
+            final created = await _receiptService.createNewReceipt(
+              file,
+              processedByMLKit: _processedByMLKit,
+              source: _source,
+              forceDuplicate: true,
+            );
+            final data = created is Map<String, dynamic>
+                ? (created['data'] as Map<String, dynamic>? ?? created)
+                : <String, dynamic>{};
+            final id = (data['id'] ?? '').toString();
+            if (id.isNotEmpty) {
+              setState(() {
+                _receiptId = id;
+                final t2 = AppLocalizations.of(context);
+                _statusText = t2?.processingAnalyzing ?? 'Analyzing your receipt...';
+              });
+              _startPolling();
+              return;
+            }
+          } catch (ee) {
+            setState(() { _hasError = true; _errorMessage = ee.toString(); });
+            return;
+          }
+        }
+        // Sin elección o sin ID existente
+        setState(() { _hasError = true; _errorMessage = e.message; });
+        return;
       } catch (e) {
         if (mounted) {
           setState(() { _hasError = true; _errorMessage = e.toString(); });

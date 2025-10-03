@@ -41,27 +41,27 @@ class _EditReceiptScreenState extends State<EditReceiptScreen> {
   String? _normalizeCategory(String? raw) {
     if (raw == null) return null;
     final v = raw.toString().trim().toLowerCase();
-    // Keys admitidas
-    const keys = ['market', 'transport', 'food', 'fuel', 'other'];
+    // Keys admitidas (alineadas con backend)
+    const keys = ['grocery', 'transport', 'food', 'fuel', 'others'];
     if (keys.contains(v)) return v;
     // Español
-    if (v == 'mercado') return 'market';
+    if (v == 'mercado') return 'grocery';
     if (v == 'transporte') return 'transport';
     if (v == 'comida') return 'food';
     if (v == 'combustible') return 'fuel';
-    if (v == 'otros' || v == 'otro') return 'other';
+    if (v == 'otros' || v == 'otro') return 'others';
     // Inglés
-    if (v == 'groceries') return 'market';
+    if (v == 'groceries' || v == 'grocery') return 'grocery';
     if (v == 'transport') return 'transport';
     if (v == 'food') return 'food';
     if (v == 'fuel') return 'fuel';
-    if (v == 'other') return 'other';
+    if (v == 'other' || v == 'others') return 'others';
     // Neerlandés
-    if (v == 'boodschappen') return 'market';
+    if (v == 'boodschappen') return 'grocery';
     if (v == 'vervoer') return 'transport';
     if (v == 'eten') return 'food';
     if (v == 'brandstof') return 'fuel';
-    if (v == 'overig') return 'other';
+    if (v == 'overig') return 'others';
     return null;
   }
 
@@ -105,13 +105,13 @@ class _EditReceiptScreenState extends State<EditReceiptScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: const ['market','transport','food','fuel','other'].contains(_category) ? _category : null,
+                value: const ['grocery','transport','food','fuel','others'].contains(_category) ? _category : null,
                 items: [
-                  DropdownMenuItem(value: 'market', child: Text(t.categoryMarket)),
+                  DropdownMenuItem(value: 'grocery', child: Text(t.categoryMarket)),
                   DropdownMenuItem(value: 'transport', child: Text(t.categoryTransport)),
                   DropdownMenuItem(value: 'food', child: Text(t.categoryFood)),
                   DropdownMenuItem(value: 'fuel', child: Text(t.categoryFuel)),
-                  DropdownMenuItem(value: 'other', child: Text(t.categoryOther)),
+                  DropdownMenuItem(value: 'others', child: Text(t.categoryOther)),
                 ],
                 decoration: InputDecoration(labelText: t.categoryLabel),
                 onChanged: (v) => setState(() => _category = v),

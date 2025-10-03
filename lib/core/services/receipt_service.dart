@@ -35,7 +35,7 @@ class ReceiptService {
   /// 1. Sube el archivo de la imagen.
   /// 2. Crea el registro del recibo con la URL de la imagen.
   Future<Map<String, dynamic>> createNewReceipt(
-    File imageFile, { bool processedByMLKit = false, String? source }
+    File imageFile, { bool processedByMLKit = false, String? source, bool? forceDuplicate }
   ) async {
     try {
       // 1. Preparar (comprimir/redimensionar) y subir la imagen
@@ -47,6 +47,7 @@ class ReceiptService {
         imageUrl,
         processedByMLKit: processedByMLKit,
         source: source,
+        forceDuplicate: forceDuplicate,
       );
 
       return newReceipt;
@@ -108,12 +109,14 @@ class ReceiptService {
       maxAmount: maxAmount,
     );
 
-    // 1) Intentar usar caché fresco
-    final cached = await ReceiptsCache.get(key, ttl: const Duration(minutes: 10));
-    if (cached != null && cached.items.isNotEmpty) {
-      final slice = _slice(cached.items, page, pageSize);
-      final hasMore = page * pageSize < cached.items.length;
-      return PageResult(items: slice, hasMore: hasMore, page: page, pageSize: pageSize, total: cached.total);
+    // 1) Intentar usar caché solo para la primera página
+    if (page == 1) {
+      final cached = await ReceiptsCache.get(key, ttl: const Duration(minutes: 10));
+      if (cached != null && cached.items.isNotEmpty) {
+        final slice = _slice(cached.items, page, pageSize);
+        final hasMore = page * pageSize < cached.items.length;
+        return PageResult(items: slice, hasMore: hasMore, page: page, pageSize: pageSize, total: cached.total);
+      }
     }
 
     // 2) Llamar API con hint de page/limit (el backend puede ignorarlo sin romper)
@@ -127,26 +130,23 @@ class ReceiptService {
       page: page,
       limit: pageSize,
     );
-    // Opcional: si backend devuelve realmente una página, inferimos hasMore por longitud
+    // El backend devuelve una página (limit/offset): hasMore por longitud
     bool hasMore = items.length == pageSize;
 
     // 3) Cachear acumulado (para navegación fluida)
+    // 3) Cachear solo la primera página para mejorar UX de pull-to-refresh
     try {
-      // Si el backend devolvió sólo la página, almacenamos lo recibido; si devolvió todo,
-      // también servirá para siguientes.
-      await ReceiptsCache.put(key, ReceiptsCacheEntry(
-        timestamp: DateTime.now(),
-        items: items,
-        total: items.length,
-      ));
+      if (page == 1) {
+        await ReceiptsCache.put(key, ReceiptsCacheEntry(
+          timestamp: DateTime.now(),
+          items: items,
+          total: items.length,
+        ));
+      }
     } catch (_) {}
 
-    final slice = _slice(items, page, pageSize);
-    // Si el backend devolvió todo, recalculamos hasMore en base al total local
-    if (!hasMore) {
-      hasMore = page * pageSize < items.length;
-    }
-    return PageResult(items: slice, hasMore: hasMore, page: page, pageSize: pageSize, total: items.length);
+    // Devolver directamente la página recibida
+    return PageResult(items: items, hasMore: hasMore, page: page, pageSize: pageSize, total: null);
   }
 
   List<dynamic> _slice(List<dynamic> list, int page, int pageSize) {

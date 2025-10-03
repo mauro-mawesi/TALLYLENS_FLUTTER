@@ -13,6 +13,7 @@ class ReceiptDetailBloc extends Bloc<ReceiptDetailEvent, ReceiptDetailState> {
   ReceiptDetailBloc({required this.api}) : super(ReceiptDetailInitial()) {
     on<LoadReceiptDetail>(_onLoad);
     on<ToggleItemVerified>(_onToggleVerified);
+    on<UpdateItemFields>(_onUpdateItemFields);
   }
 
   Future<void> _onLoad(LoadReceiptDetail event, Emitter<ReceiptDetailState> emit) async {
@@ -57,6 +58,51 @@ class ReceiptDetailBloc extends Bloc<ReceiptDetailEvent, ReceiptDetailState> {
       await api.updateReceiptItem(
         receiptId: event.receiptId,
         itemId: event.itemId,
+        isVerified: event.isVerified,
+      );
+    } catch (e) {
+      if (e is UnauthorizedException) {
+        sl<AuthService>().forceLock();
+        emit(ReceiptDetailUnauthorized());
+      } else {
+        emit(ReceiptDetailError(e.toString()));
+      }
+    }
+  }
+
+  Future<void> _onUpdateItemFields(UpdateItemFields event, Emitter<ReceiptDetailState> emit) async {
+    final current = state;
+    if (current is! ReceiptDetailLoaded) return;
+    try {
+      // Optimistic update
+      final updatedItems = current.items.map((it) {
+        if (it.id != event.itemId) return it;
+        final q = event.quantity ?? it.quantity;
+        final up = event.unitPrice ?? it.unitPrice;
+        final tot = (q ?? 1) * (up ?? 0);
+        return ReceiptItem(
+          id: it.id,
+          receiptId: it.receiptId,
+          productId: it.productId,
+          originalText: it.originalText,
+          quantity: q,
+          unitPrice: up,
+          totalPrice: tot,
+          currency: it.currency,
+          unit: it.unit,
+          confidence: it.confidence,
+          isVerified: event.isVerified ?? it.isVerified,
+          position: it.position,
+          product: it.product,
+        );
+      }).toList();
+      emit(ReceiptDetailLoaded(receipt: current.receipt, items: updatedItems));
+
+      await api.updateReceiptItem(
+        receiptId: event.receiptId,
+        itemId: event.itemId,
+        quantity: event.quantity,
+        unitPrice: event.unitPrice,
         isVerified: event.isVerified,
       );
     } catch (e) {

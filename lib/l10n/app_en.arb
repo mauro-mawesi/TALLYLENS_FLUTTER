@@ -168,4 +168,9 @@
   "lastPurchase": "Last purchase",
   "daysSinceLast": "Days since last",
   "nextPurchasePrediction": "Next purchase prediction"
+  ,
+  "duplicateDetectedTitle": "Possible duplicate",
+  "duplicateDetectedMessage": "This receipt appears to be a duplicate. What would you like to do?",
+  "viewExisting": "View existing",
+  "createAnyway": "Create anyway"
 }

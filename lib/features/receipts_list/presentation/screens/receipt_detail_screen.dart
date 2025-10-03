@@ -221,13 +221,21 @@ class _ReceiptDetailView extends StatelessWidget {
                           final unit = it.unit ?? '';
                           final unitPrice = it.unitPrice ?? 0;
                           final total = it.totalPrice ?? (qty * unitPrice);
+                          final itemFmt = NumberFormat.simpleCurrency(
+                            locale: locale,
+                            name: it.currency ?? receipt.currency,
+                          );
+                          final unitPriceStr = itemFmt.format(unitPrice);
+                          final totalStr = itemFmt.format(total);
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                             child: GlassCard(
                               borderRadius: 20,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.only(left: 12, right: 12, top: 8, bottom: 4),
                               child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                isThreeLine: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                minVerticalPadding: 8,
                                 onTap: () {
                                   final productId = it.product?.id ?? it.productId;
                                   if (productId != null && productId.isNotEmpty) {
@@ -262,24 +270,32 @@ class _ReceiptDetailView extends StatelessWidget {
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(color: FlowColors.text(context)),
                                 ),
                                 subtitle: Text(
-                                  '${qty.toStringAsFixed(qty.truncateToDouble() == qty ? 0 : 2)} $unit × \$${unitPrice.toStringAsFixed(2)}',
+                                  '${qty.toStringAsFixed(qty.truncateToDouble() == qty ? 0 : 2)} $unit × $unitPriceStr',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: FlowColors.textSecondary(context)),
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FlowColors.textSecondary(context)),
                                 ),
-                                trailing: Column(
+                                trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      '\$' + total.toStringAsFixed(2),
-                                      style: const TextStyle(color: FlowColors.primary, fontWeight: FontWeight.w700),
+                                      totalStr,
+                                      style: const TextStyle(color: FlowColors.primary, fontWeight: FontWeight.w700, fontSize: 16),
                                     ),
                                     if (it.isVerified ?? false)
                                       const Padding(
-                                        padding: EdgeInsets.only(top: 4),
+                                        padding: EdgeInsets.only(left: 6),
                                         child: Icon(Icons.check_circle, size: 16, color: FlowColors.primary),
                                       ),
+                                    const SizedBox(width: 6),
+                                    IconButton(
+                                      iconSize: 18,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                                      tooltip: AppLocalizations.of(context)!.editReceiptTitle,
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () => _openEditItemSheet(context, it),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -300,4 +316,66 @@ class _ReceiptDetailView extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _openEditItemSheet(BuildContext context, ReceiptItem it) async {
+  final qtyCtrl = TextEditingController(text: (it.quantity ?? 1).toString());
+  final priceCtrl = TextEditingController(text: (it.unitPrice ?? 0).toStringAsFixed(2));
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) {
+      final bottom = MediaQuery.of(ctx).viewInsets.bottom;
+      return SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Text(AppLocalizations.of(ctx)!.editReceiptTitle, style: Theme.of(ctx).textTheme.titleLarge),
+                  const Spacer(),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: qtyCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Quantity'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: priceCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Unit price'),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                icon: const Icon(Icons.save_outlined),
+                label: Text(AppLocalizations.of(ctx)!.saveChanges),
+                onPressed: () {
+                  final q = double.tryParse(qtyCtrl.text.replaceAll(',', '.'));
+                  final p = double.tryParse(priceCtrl.text.replaceAll(',', '.'));
+                  ctx.read<ReceiptDetailBloc>().add(UpdateItemFields(
+                    receiptId: it.receiptId,
+                    itemId: it.id,
+                    quantity: q,
+                    unitPrice: p,
+                  ));
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
