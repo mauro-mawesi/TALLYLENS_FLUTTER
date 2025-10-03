@@ -4,6 +4,7 @@ class UserProfile {
   final String? username;
   final String? firstName;
   final String? lastName;
+  final String? profileImageUrl;
 
   const UserProfile({
     required this.id,
@@ -11,6 +12,7 @@ class UserProfile {
     this.username,
     this.firstName,
     this.lastName,
+    this.profileImageUrl,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -19,6 +21,7 @@ class UserProfile {
         username: json['username'] as String?,
         firstName: json['firstName'] as String?,
         lastName: json['lastName'] as String?,
+        profileImageUrl: json['profileImageUrl'] as String?,
       );
 
   String get displayName {

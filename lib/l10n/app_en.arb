@@ -172,5 +172,12 @@
   "duplicateDetectedTitle": "Possible duplicate",
   "duplicateDetectedMessage": "This receipt appears to be a duplicate. What would you like to do?",
   "viewExisting": "View existing",
-  "createAnyway": "Create anyway"
+  "createAnyway": "Create anyway",
+  "badgeReceiptsDigitized": "{count} Receipts digitized",
+  "@badgeReceiptsDigitized": {"placeholders": {"count": {"type": "String"}}},
+  "badgeMonthlyUnderControl": "Monthly spend under control",
+  "badgeFirstMonthUsing": "First month using TallyLens",
+  "profileReceiptsScanned": "Receipts scanned",
+  "profileUniqueProducts": "Unique products",
+  "profileTotalSpent": "Total spent"
 }

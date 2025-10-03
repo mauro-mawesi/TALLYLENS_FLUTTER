@@ -54,5 +54,23 @@ class ReceiptsCache {
       return null;
     }
   }
+
+  /// Delete a specific cache entry by key
+  static Future<void> delete(String key) async {
+    await _ensureBox();
+    await _box!.delete(key);
+  }
+
+  /// Clear all cached receipts
+  static Future<void> clearAll() async {
+    await _ensureBox();
+    await _box!.clear();
+  }
+
+  /// Get all cache keys (useful for debugging)
+  static Future<List<String>> getAllKeys() async {
+    await _ensureBox();
+    return _box!.keys.cast<String>().toList();
+  }
 }
 

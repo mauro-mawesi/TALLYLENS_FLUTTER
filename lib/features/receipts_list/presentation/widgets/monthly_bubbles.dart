@@ -250,25 +250,322 @@ class _LinePainter extends CustomPainter {
   bool shouldRepaint(covariant _LinePainter oldDelegate) => oldDelegate.offsets != offsets;
 }
 
-class _BubblesShimmer extends StatelessWidget {
+class _BubblesShimmer extends StatefulWidget {
   const _BubblesShimmer();
+  @override
+  State<_BubblesShimmer> createState() => _BubblesShimmerState();
+}
+
+class _BubblesShimmerState extends State<_BubblesShimmer> with TickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late AnimationController _pulseController;
+  late AnimationController _fadeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    _pulseController.dispose();
+    _fadeController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return SizedBox(
-      height: 120,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(4, (i) => Container(
-          width: 44,
-          height: 44,
-          margin: EdgeInsets.only(left: i == 0 ? 8 : 0, right: i == 3 ? 8 : 0),
-          decoration: BoxDecoration(
-            color: cs.surfaceVariant.withOpacity(0.3),
-            shape: BoxShape.circle,
-          ),
-        )),
+      height: 196,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+
+          // Posiciones de las burbujas (simulando el layout real)
+          final bubbleCount = 4;
+          final sizes = [72.0, 64.0, 78.0, 68.0];
+          final yFracs = [0.45, 0.65, 0.35, 0.55];
+
+          final sidePad = 50.0;
+          final gap = (w - 2 * sidePad) / (bubbleCount - 1);
+
+          final positions = List.generate(bubbleCount, (i) {
+            final cx = sidePad + i * gap;
+            final cy = 60 + yFracs[i] * (h - 100);
+            return Offset(cx, cy);
+          });
+
+          return AnimatedBuilder(
+            animation: Listenable.merge([_shimmerController, _pulseController, _fadeController]),
+            builder: (context, child) {
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Líneas de conexión con fade
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _ShimmerLinePainter(
+                        offsets: positions,
+                        progress: _fadeController.value,
+                        color: isDark
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.black.withOpacity(0.08),
+                      ),
+                    ),
+                  ),
+
+                  // Burbujas con pulso y shimmer
+                  ...List.generate(bubbleCount, (i) {
+                    final pos = positions[i];
+                    final size = sizes[i];
+                    final radius = size / 2;
+
+                    // Fase de pulso escalonada para cada burbuja
+                    final phaseOffset = i * 0.25;
+                    final pulseValue = (((_pulseController.value + phaseOffset) % 1.0) * 2 - 1).abs();
+                    final scale = 1.0 + pulseValue * 0.08;
+
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Label shimmer (encima de la burbuja)
+                        Positioned(
+                          left: pos.dx - 30,
+                          top: pos.dy - radius - 24,
+                          child: _ShimmerBox(
+                            width: 60,
+                            height: 12,
+                            shimmerProgress: _shimmerController.value,
+                            borderRadius: 6,
+                            isDark: isDark,
+                          ),
+                        ),
+
+                        // Burbuja con glow animado
+                        Positioned(
+                          left: pos.dx - radius,
+                          top: pos.dy - radius,
+                          child: Transform.scale(
+                            scale: scale,
+                            child: Container(
+                              width: size,
+                              height: size,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    (isDark ? Colors.white : Colors.black).withOpacity(0.08),
+                                    (isDark ? Colors.white : Colors.black).withOpacity(0.04),
+                                  ],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: cs.primary.withOpacity(0.15 * pulseValue),
+                                    blurRadius: 20 + pulseValue * 10,
+                                    spreadRadius: 2 + pulseValue * 3,
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                                  child: Stack(
+                                    children: [
+                                      // Shimmer gradient overlay
+                                      Positioned.fill(
+                                        child: CustomPaint(
+                                          painter: _CircleShimmerPainter(
+                                            progress: _shimmerController.value,
+                                            color: cs.primary.withOpacity(0.12),
+                                          ),
+                                        ),
+                                      ),
+                                      // Valor simulado
+                                      Center(
+                                        child: _ShimmerBox(
+                                          width: size * 0.5,
+                                          height: 10,
+                                          shimmerProgress: _shimmerController.value,
+                                          borderRadius: 5,
+                                          isDark: isDark,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Partículas flotantes alrededor
+                        if (pulseValue > 0.7)
+                          ...List.generate(3, (j) {
+                            final angle = (i * 3 + j) * math.pi * 2 / 9;
+                            final distance = radius + 10 + pulseValue * 8;
+                            final px = pos.dx + math.cos(angle) * distance;
+                            final py = pos.dy + math.sin(angle) * distance;
+
+                            return Positioned(
+                              left: px - 2,
+                              top: py - 2,
+                              child: Opacity(
+                                opacity: (pulseValue - 0.7) * 3.3,
+                                child: Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: cs.primary.withOpacity(0.6),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: cs.primary.withOpacity(0.4),
+                                        blurRadius: 4,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                    );
+                  }),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
+}
+
+// Widget reutilizable para cajas con efecto shimmer
+class _ShimmerBox extends StatelessWidget {
+  final double width;
+  final double height;
+  final double shimmerProgress;
+  final double borderRadius;
+  final bool isDark;
+
+  const _ShimmerBox({
+    required this.width,
+    required this.height,
+    required this.shimmerProgress,
+    this.borderRadius = 8,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        gradient: LinearGradient(
+          begin: Alignment(-1.0 + shimmerProgress * 2, 0),
+          end: Alignment(shimmerProgress * 2, 0),
+          colors: [
+            (isDark ? Colors.white : Colors.black).withOpacity(0.06),
+            (isDark ? Colors.white : Colors.black).withOpacity(0.12),
+            (isDark ? Colors.white : Colors.black).withOpacity(0.06),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ),
+      ),
+    );
+  }
+}
+
+// Painter para líneas con fade animado
+class _ShimmerLinePainter extends CustomPainter {
+  final List<Offset> offsets;
+  final double progress;
+  final Color color;
+
+  _ShimmerLinePainter({
+    required this.offsets,
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (offsets.length < 2) return;
+
+    for (int i = 0; i < offsets.length - 1; i++) {
+      final p0 = offsets[i];
+      final p1 = offsets[i + 1];
+
+      // Opacidad oscilante
+      final opacity = 0.3 + progress * 0.4;
+
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = color.withOpacity(opacity)
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawLine(p0, p1, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ShimmerLinePainter oldDelegate) =>
+    oldDelegate.progress != progress || oldDelegate.offsets != offsets;
+}
+
+// Painter para efecto shimmer circular
+class _CircleShimmerPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _CircleShimmerPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // Gradiente radial animado
+    final paint = Paint()
+      ..shader = RadialGradient(
+        center: Alignment(-1.0 + progress * 2, -1.0 + progress * 2),
+        radius: 1.5,
+        colors: [
+          color,
+          color.withOpacity(0),
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: radius));
+
+    canvas.drawCircle(center, radius, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CircleShimmerPainter oldDelegate) =>
+    oldDelegate.progress != progress;
 }

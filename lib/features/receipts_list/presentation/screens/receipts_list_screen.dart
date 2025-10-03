@@ -98,7 +98,15 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
             }
             if (state is ReceiptsListLoaded) {
               return RefreshIndicator(
-                onRefresh: () async => context.read<ReceiptsListBloc>().add(FetchReceipts()),
+                onRefresh: () async => context.read<ReceiptsListBloc>().add(
+                  FetchReceipts(
+                    category: _currentFilters?['category'] as String?,
+                    merchant: _currentFilters?['merchant'] as String?,
+                    dateRange: _currentFilters?['dateRange'] as DateTimeRange?,
+                    amountRange: _currentFilters?['amountRange'] as RangeValues?,
+                    forceRefresh: true,
+                  ),
+                ),
                 child: CustomScrollView(
                   controller: _scroll,
                   slivers: [

@@ -335,6 +335,38 @@ class ApiService {
     throw Exception('Error en la subida de imagen: ${resp.statusCode}');
   }
 
+  /// Upload image and return full response (including imageUrl)
+  Future<Map<String, dynamic>> uploadImageWithResponse(File imageFile) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(imageFile.path),
+    });
+    final resp = await _request(() => _dio.post('/upload', data: form));
+    if (resp.statusCode == 200) {
+      return resp.data as Map<String, dynamic>;
+    }
+    if (resp.statusCode == 401) throw UnauthorizedException('Sesión expirada');
+    throw Exception('Error en la subida de imagen: ${resp.statusCode}');
+  }
+
+  /// Update user profile photo
+  Future<void> updateProfilePhoto(String imageUrl) async {
+    final resp = await _request(() => _dio.put(
+      '/auth/profile/photo',
+      data: {'imageUrl': imageUrl},
+    ));
+    if (resp.statusCode != 200) {
+      throw Exception('Error updating profile photo: ${resp.statusCode}');
+    }
+  }
+
+  /// Delete user profile photo
+  Future<void> deleteProfilePhoto() async {
+    final resp = await _request(() => _dio.delete('/auth/profile/photo'));
+    if (resp.statusCode != 200) {
+      throw Exception('Error deleting profile photo: ${resp.statusCode}');
+    }
+  }
+
   /// Persistir preferencia de idioma en backend (silencioso en caso de error)
   Future<void> updatePreferredLanguage(String code) async {
     try {
@@ -408,6 +440,14 @@ class ApiService {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception('Error imagen info: ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> getReceiptStats({int days = 365}) async {
+    final response = await _request(() => _dio.get('/receipts/stats', queryParameters: {'days': days}));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error receipt stats: ${response.statusCode}');
   }
 
   // --- Analytics endpoints ---

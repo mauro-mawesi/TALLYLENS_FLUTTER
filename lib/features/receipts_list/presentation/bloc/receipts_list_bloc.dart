@@ -40,6 +40,7 @@ class ReceiptsListBloc extends Bloc<ReceiptsListEvent, ReceiptsListState> {
         maxAmount: _amountRange?.end,
         page: 1,
         pageSize: _pageSize,
+        forceRefresh: event.forceRefresh,
       );
 
       // 3. Emite el estado de éxito con los datos cargados.

@@ -167,5 +167,12 @@
   "duplicateDetectedTitle": "Posible duplicado",
   "duplicateDetectedMessage": "Este recibo parece un duplicado. ¿Qué deseas hacer?",
   "viewExisting": "Ver existente",
-  "createAnyway": "Crear de todos modos"
+  "createAnyway": "Crear de todos modos",
+  "badgeReceiptsDigitized": "{count} Recibos digitalizados",
+  "@badgeReceiptsDigitized": {"placeholders": {"count": {"type": "String"}}},
+  "badgeMonthlyUnderControl": "Gasto mensual controlado",
+  "badgeFirstMonthUsing": "Primer mes usando TallyLens",
+  "profileReceiptsScanned": "Recibos escaneados",
+  "profileUniqueProducts": "Productos únicos",
+  "profileTotalSpent": "Total gastado"
 }

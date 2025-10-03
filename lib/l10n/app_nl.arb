@@ -167,5 +167,12 @@
   "duplicateDetectedTitle": "Mogelijk duplicaat",
   "duplicateDetectedMessage": "Dit bonnetje lijkt een duplicaat. Wat wil je doen?",
   "viewExisting": "Bestaande bekijken",
-  "createAnyway": "Toch aanmaken"
+  "createAnyway": "Toch aanmaken",
+  "badgeReceiptsDigitized": "{count} Bonnetjes gedigitaliseerd",
+  "@badgeReceiptsDigitized": {"placeholders": {"count": {"type": "String"}}},
+  "badgeMonthlyUnderControl": "Maandelijkse uitgaven onder controle",
+  "badgeFirstMonthUsing": "Eerste maand met TallyLens",
+  "profileReceiptsScanned": "Bonnetjes gescand",
+  "profileUniqueProducts": "Unieke producten",
+  "profileTotalSpent": "Totaal uitgegeven"
 }

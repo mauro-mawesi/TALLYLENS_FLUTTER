@@ -11,6 +11,7 @@ import 'package:recibos_flutter/core/widgets/glass_card.dart';
 import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:recibos_flutter/core/services/privacy_controller.dart';
+import 'widgets/profile_top_hero.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -22,17 +23,7 @@ class ProfileScreen extends StatelessWidget {
     final user = auth.profile;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          t.profileTitle,
-          style: TextStyle(
-            color: FlowColors.text(context),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, title: const SizedBox.shrink()),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -46,72 +37,11 @@ class ProfileScreen extends StatelessWidget {
           builder: (context, _) {
             final bottomInset = MediaQuery.of(context).padding.bottom;
             return ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 96),
+            padding: EdgeInsets.fromLTRB(16, 10, 16, bottomInset + 96),
             children: [
+              ProfileTopHero(email: user?.email ?? ''),
+              const SizedBox(height: 16),
               // User Profile Card
-              GlassCard(
-                borderRadius: 24,
-                padding: const EdgeInsets.all(20),
-                color: FlowColors.glassTint(context),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [FlowColors.primary, FlowColors.accentCyan],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        Icons.person_outline,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user?.displayName ?? t.usernameLabel,
-                            style: TextStyle(
-                              color: FlowColors.text(context),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user?.email ?? '',
-                            style: TextStyle(
-                              color: FlowColors.textSecondary(context),
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Appearance Section
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  t.appearanceSection,
-                  style: TextStyle(
-                    color: FlowColors.text(context),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
               GlassCard(
                 borderRadius: 20,
                 padding: const EdgeInsets.symmetric(vertical: 8),

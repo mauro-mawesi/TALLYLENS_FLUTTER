@@ -16,7 +16,14 @@ class FetchReceipts extends ReceiptsListEvent {
   final String? merchant;
   final DateTimeRange? dateRange;
   final RangeValues? amountRange;
-  const FetchReceipts({this.category, this.merchant, this.dateRange, this.amountRange});
+  final bool forceRefresh;
+  const FetchReceipts({
+    this.category,
+    this.merchant,
+    this.dateRange,
+    this.amountRange,
+    this.forceRefresh = false,
+  });
 
   @override
   List<Object> get props => [
@@ -26,6 +33,7 @@ class FetchReceipts extends ReceiptsListEvent {
     dateRange?.end.millisecondsSinceEpoch ?? 0,
     amountRange?.start ?? 0,
     amountRange?.end ?? 0,
+    forceRefresh,
   ];
 }
 

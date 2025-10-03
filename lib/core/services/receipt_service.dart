@@ -34,6 +34,7 @@ class ReceiptService {
   /// Proceso completo para crear un nuevo recibo.
   /// 1. Sube el archivo de la imagen.
   /// 2. Crea el registro del recibo con la URL de la imagen.
+  /// 3. Invalida el cache de recibos para forzar refresh
   Future<Map<String, dynamic>> createNewReceipt(
     File imageFile, { bool processedByMLKit = false, String? source, bool? forceDuplicate }
   ) async {
@@ -50,11 +51,23 @@ class ReceiptService {
         forceDuplicate: forceDuplicate,
       );
 
+      // 3. Invalidar cache para que la lista se actualice
+      await invalidateCache();
+
       return newReceipt;
     } catch (e) {
       // Aquí se podría añadir un manejo de errores más específico si fuera necesario.
       print('Error en createNewReceipt: $e');
       rethrow;
+    }
+  }
+
+  /// Invalida todo el cache de recibos
+  Future<void> invalidateCache() async {
+    try {
+      await ReceiptsCache.clearAll();
+    } catch (e) {
+      print('Error invalidating cache: $e');
     }
   }
 
@@ -90,6 +103,8 @@ class ReceiptService {
 
   /// Paginación con cache (TTL 10 min). Si la API soporta page/limit, se usa; si no,
   /// igualmente cacheamos la lista completa y servimos páginas locales.
+  ///
+  /// [forceRefresh]: Si es true, ignora el cache y obtiene datos frescos del servidor
   Future<PageResult> getReceiptsPaged({
     String? category,
     String? merchant,
@@ -99,6 +114,7 @@ class ReceiptService {
     double? maxAmount,
     required int page,
     int pageSize = 20,
+    bool forceRefresh = false,
   }) async {
     final key = _cacheKey(
       category: category,
@@ -109,8 +125,8 @@ class ReceiptService {
       maxAmount: maxAmount,
     );
 
-    // 1) Intentar usar caché solo para la primera página
-    if (page == 1) {
+    // 1) Intentar usar caché solo para la primera página (si no se forzó refresh)
+    if (page == 1 && !forceRefresh) {
       final cached = await ReceiptsCache.get(key, ttl: const Duration(minutes: 10));
       if (cached != null && cached.items.isNotEmpty) {
         final slice = _slice(cached.items, page, pageSize);
