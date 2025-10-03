@@ -111,6 +111,7 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
                   controller: _scroll,
                   slivers: [
                     _buildHeader(context, t),
+                    _buildBubblesSection(context),
                     _buildSearchBar(context, t),
                     _offlineBannerIfNeeded(context),
                     // 2.C ERROR CRÍTICO: Padding ajustado para evitar el OVERFLOW
@@ -136,7 +137,7 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
     final auth = sl<AuthService>();
     return SliverAppBar(
       backgroundColor: Colors.transparent,
-      expandedHeight: 320,
+      expandedHeight: 96,
       pinned: false,
       floating: false,
       actions: [
@@ -167,37 +168,31 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        titlePadding: EdgeInsets.zero,
-        background: Column(
+        titlePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        title: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
-            // Título y subtítulo
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    t.greeting(auth.displayName ?? ''),
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    t.recentReceipts,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FlowColors.textSecondary(context)),
-                  ),
-                ],
-              ),
+            Text(
+              t.greeting(auth.displayName ?? ''),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
-            // Bubbles debajo del título
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: MonthlyBubbles(),
+            Text(
+              t.recentReceipts,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FlowColors.textSecondary(context)),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBubblesSection(BuildContext context) {
+    return const SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 4),
+        child: MonthlyBubbles(),
       ),
     );
   }
