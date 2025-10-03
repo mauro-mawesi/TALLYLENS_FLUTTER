@@ -112,9 +112,18 @@ class ApiService {
     }
     Future<bool> doRefresh() async {
       _lastRefreshAttempt = DateTime.now().toUtc();
-      final r = await _dio.post('/auth/refresh',
-          data: {'refreshToken': _refreshToken},
-          options: Options(validateStatus: (code) => true));
+      Response r;
+      try {
+        r = await _dio.post('/auth/refresh',
+            data: {'refreshToken': _refreshToken},
+            options: Options(validateStatus: (code) => true));
+      } on DioException {
+        // Error de red: aplicar backoff pero NO cerrar sesión
+        _consecutiveRefreshFailures += 1;
+        final backoff = Duration(seconds: 5 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
+        _refreshCooldownUntil = DateTime.now().toUtc().add(backoff);
+        return false;
+      }
       if (r.statusCode == 200) {
         final data = r.data;
         final tokens = data['data']?['tokens'];
@@ -138,14 +147,12 @@ class ApiService {
       _consecutiveRefreshFailures += 1;
       Duration backoff;
       if (r.statusCode == 429) {
-        // Rate limited: exponential backoff starting at 30s
         backoff = Duration(seconds: 30 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 8));
       } else {
-        // Other errors: modest backoff to avoid spamming
         backoff = Duration(seconds: 5 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
       }
       _refreshCooldownUntil = DateTime.now().toUtc().add(backoff);
-      // Logout inmediato si el refresh es inválido
+      // Disparar política tolerante solo si el refresh es inválido (400/401)
       if (r.statusCode == 401 || r.statusCode == 400) {
         final cb = AuthBridge.onRefreshFailed;
         if (cb != null) await cb();
@@ -418,6 +425,16 @@ class ApiService {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception('Error spending analysis: ${response.statusCode}');
+  }
+
+  Future<List<Map<String, dynamic>>> getMonthlyTotals({int months = 4}) async {
+    final response = await _request(() => _dio.get('/analytics/monthly-totals', queryParameters: {'months': months}));
+    if (response.statusCode == 200) {
+      final data = response.data['data'];
+      final list = (data['monthlyTotals'] as List?) ?? const [];
+      return list.cast<Map<String, dynamic>>();
+    }
+    throw Exception('Error monthly totals: ${response.statusCode}');
   }
 
   // --- Product analytics ---

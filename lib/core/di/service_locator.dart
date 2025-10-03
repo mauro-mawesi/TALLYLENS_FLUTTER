@@ -48,10 +48,10 @@ void setupServiceLocator() {
   AuthBridge.onTokensUpdated = (String? access, String? refresh) async {
     await sl<AuthService>().updateTokens(access: access, refresh: refresh);
   };
-  // Logout inmediato cuando falla el refresh
+  // Falla de refresh: usar política tolerante en lugar de logout inmediato
   AuthBridge.onRefreshFailed = () async {
     try {
-      await sl<AuthService>().logout();
+      await sl<AuthService>().handleUnauthorized();
     } catch (_) {}
   };
 }

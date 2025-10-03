@@ -54,6 +54,8 @@ class AuthService with ChangeNotifier {
       _locked = _biometricEnabled;
       await _loadProfileSafe();
       _scheduleProactiveRefresh();
+      // Refresh silencioso si el token expira pronto (mejora UX al abrir)
+      await _maybeRefreshSoon();
     }
     notifyListeners();
   }
@@ -241,12 +243,13 @@ class AuthService with ChangeNotifier {
     // Primer intento: forzar lock para desbloqueo biométrico
     forceLock();
     final now = DateTime.now();
-    if (_firstUnauthAt == null || now.difference(_firstUnauthAt!) > const Duration(seconds: 10)) {
+    // Ventana de tolerancia ampliada a 30s y umbral 3
+    if (_firstUnauthAt == null || now.difference(_firstUnauthAt!) > const Duration(seconds: 30)) {
       _firstUnauthAt = now;
       _unauthCount = 1;
     } else {
       _unauthCount++;
-      if (_unauthCount >= 2) {
+      if (_unauthCount >= 3) {
         // Demasiados 401 seguidos en corto tiempo: probablemente refresh inválido
         await logout();
         _unauthCount = 0;

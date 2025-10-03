@@ -14,6 +14,7 @@ import 'package:recibos_flutter/core/services/auth_service.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:recibos_flutter/core/services/connectivity_service.dart';
+import 'package:recibos_flutter/features/receipts_list/presentation/widgets/monthly_bubbles.dart';
 
 class ReceiptsListScreen extends StatelessWidget {
   final Map<String, dynamic>? initialFilters;
@@ -102,8 +103,14 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
                   controller: _scroll,
                   slivers: [
                     _buildHeader(context, t),
-                    _buildSearchBar(context, t),
-                    _offlineBannerIfNeeded(context),
+                  _buildSearchBar(context, t),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 4),
+                      child: const MonthlyBubbles(),
+                    ),
+                  ),
+                  _offlineBannerIfNeeded(context),
                     // 2.C ERROR CRÍTICO: Padding ajustado para evitar el OVERFLOW
                     SliverPadding(
                       padding: const EdgeInsets.only(top: 8, bottom: 120), // Espacio generoso para el FAB
