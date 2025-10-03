@@ -111,14 +111,8 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
                   controller: _scroll,
                   slivers: [
                     _buildHeader(context, t),
-                  _buildSearchBar(context, t),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 4),
-                      child: const MonthlyBubbles(),
-                    ),
-                  ),
-                  _offlineBannerIfNeeded(context),
+                    _buildSearchBar(context, t),
+                    _offlineBannerIfNeeded(context),
                     // 2.C ERROR CRÍTICO: Padding ajustado para evitar el OVERFLOW
                     SliverPadding(
                       padding: const EdgeInsets.only(top: 8, bottom: 120), // Espacio generoso para el FAB
@@ -142,7 +136,9 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
     final auth = sl<AuthService>();
     return SliverAppBar(
       backgroundColor: Colors.transparent,
-      expandedHeight: 96,
+      expandedHeight: 320,
+      pinned: false,
+      floating: false,
       actions: [
         IconButton(
           tooltip: t.filtersTitle,
@@ -171,18 +167,34 @@ class _ReceiptsListViewState extends State<ReceiptsListView> {
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        title: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
+        collapseMode: CollapseMode.parallax,
+        titlePadding: EdgeInsets.zero,
+        background: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              t.greeting(auth.displayName ?? ''),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
+            // Título y subtítulo
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t.greeting(auth.displayName ?? ''),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t.recentReceipts,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FlowColors.textSecondary(context)),
+                  ),
+                ],
+              ),
             ),
-            Text(
-              t.recentReceipts,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FlowColors.textSecondary(context)),
+            // Bubbles debajo del título
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: MonthlyBubbles(),
             ),
           ],
         ),

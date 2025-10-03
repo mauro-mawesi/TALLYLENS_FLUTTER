@@ -40,9 +40,37 @@ class _MonthlyBubblesView extends StatelessWidget {
   }
 }
 
-class _BubblesPainterWidget extends StatelessWidget {
+class _BubblesPainterWidget extends StatefulWidget {
   final List<MonthlyPoint> points;
   const _BubblesPainterWidget({required this.points});
+
+  @override
+  State<_BubblesPainterWidget> createState() => _BubblesPainterWidgetState();
+}
+
+class _BubblesPainterWidgetState extends State<_BubblesPainterWidget> with SingleTickerProviderStateMixin {
+  late AnimationController _sweepController;
+
+  @override
+  void initState() {
+    super.initState();
+    _sweepController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    );
+    // Iniciar el efecto después de un pequeño delay y repetir en loop (ida y vuelta)
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        _sweepController.repeat(reverse: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sweepController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,13 +80,13 @@ class _BubblesPainterWidget extends StatelessWidget {
       child: LayoutBuilder(builder: (ctx, constraints) {
         final w = constraints.maxWidth;
         final h = constraints.maxHeight;
-        final n = points.length;
+        final n = widget.points.length;
         // Bubble sizes (stable pseudo-random per month)
         const minD = 56.0;
         const maxD = 84.0;
         final sizes = <double>[];
         for (int i = 0; i < n; i++) {
-          final seed = points[i].month.millisecondsSinceEpoch ^ (i * 9973);
+          final seed = widget.points[i].month.millisecondsSinceEpoch ^ (i * 9973);
           final r = math.Random(seed & 0x7fffffff);
           final d = minD + r.nextDouble() * (maxD - minD);
           sizes.add(d);
@@ -86,7 +114,7 @@ class _BubblesPainterWidget extends StatelessWidget {
         const double delta = 0.06;   // separación mínima entre consecutivos
         final fracs = <double>[];
         for (int i = 0; i < n; i++) {
-          final seed = points[i].month.millisecondsSinceEpoch ^ (i * 7919);
+          final seed = widget.points[i].month.millisecondsSinceEpoch ^ (i * 7919);
           final r = math.Random(seed & 0x7fffffff).nextDouble();
           double base = minFrac + r * (maxFrac - minFrac);
           if (i == 0) {
@@ -136,18 +164,36 @@ class _BubblesPainterWidget extends StatelessWidget {
         ];
         final bubbleColors = List<Color>.generate(n, (i) => palette[i % palette.length]);
 
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Line gradient from first bubble color to last bubble color
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _LinePainter(offsets: centers, colors: bubbleColors),
-              ),
-            ),
-            ...List.generate(n, (i) {
+        return AnimatedBuilder(
+          animation: _sweepController,
+          builder: (context, child) {
+            final sweepProgress = _sweepController.value;
+
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Line gradient from first bubble color to last bubble color
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _LinePainter(offsets: centers, colors: bubbleColors),
+                  ),
+                ),
+
+                // Sweep light effect over lines
+                if (sweepProgress > 0 && sweepProgress < 1)
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _SweepLinePainter(
+                        offsets: centers,
+                        progress: sweepProgress,
+                        width: w,
+                      ),
+                    ),
+                  ),
+
+                ...List.generate(n, (i) {
               final c = centers[i];
-              final p = points[i];
+              final p = widget.points[i];
               final bubbleColor = bubbleColors[i];
               final bubbleD = sizes[i];
               final bubbleR = radii[i];
@@ -169,6 +215,19 @@ class _BubblesPainterWidget extends StatelessWidget {
               final lw = labelTP.size.width;
               final lh = labelTP.size.height;
 
+              // Calcular si el sweep está pasando por esta burbuja
+              final bubbleStartX = c.dx - bubbleR;
+              final bubbleEndX = c.dx + bubbleR;
+              final sweepX = w * sweepProgress;
+              final sweepWidth = 120.0; // Ancho del haz de luz
+
+              // Calcular intensidad del brillo para esta burbuja (0 a 1)
+              double glowIntensity = 0.0;
+              if (sweepX >= bubbleStartX - sweepWidth / 2 && sweepX <= bubbleEndX + sweepWidth / 2) {
+                final bubbleCenterDist = (sweepX - c.dx).abs();
+                glowIntensity = 1.0 - (bubbleCenterDist / (bubbleR + sweepWidth / 2)).clamp(0.0, 1.0);
+              }
+
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -184,12 +243,16 @@ class _BubblesPainterWidget extends StatelessWidget {
                     top: c.dy - bubbleR,
                     width: bubbleD,
                     height: bubbleD,
-                  child: Container(
+                    child: Container(
                       decoration: BoxDecoration(
                         color: bubbleColor,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: bubbleColor.withOpacity(0.35), blurRadius: 16, spreadRadius: 0.5),
+                          BoxShadow(
+                            color: bubbleColor.withOpacity(0.35 + glowIntensity * 0.4),
+                            blurRadius: 16 + glowIntensity * 12,
+                            spreadRadius: 0.5 + glowIntensity * 2,
+                          ),
                         ],
                         border: Border.all(color: FlowColors.divider(context), width: 0.8),
                       ),
@@ -204,10 +267,37 @@ class _BubblesPainterWidget extends StatelessWidget {
                       }),
                     ),
                   ),
+
+                  // Sweep light overlay on bubble
+                  if (glowIntensity > 0.1)
+                    Positioned(
+                      left: c.dx - bubbleR,
+                      top: c.dy - bubbleR,
+                      width: bubbleD,
+                      height: bubbleD,
+                      child: ClipOval(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: RadialGradient(
+                              center: Alignment.center,
+                              radius: 0.8,
+                              colors: [
+                                Colors.white.withOpacity(0.5 * glowIntensity),
+                                Colors.white.withOpacity(0.2 * glowIntensity),
+                                Colors.white.withOpacity(0),
+                              ],
+                              stops: const [0.0, 0.5, 1.0],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               );
             }),
-          ],
+              ],
+            );
+          },
         );
       }),
     );
@@ -248,6 +338,85 @@ class _LinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LinePainter oldDelegate) => oldDelegate.offsets != offsets;
+}
+
+// Painter para el efecto de brillo que recorre las líneas
+class _SweepLinePainter extends CustomPainter {
+  final List<Offset> offsets;
+  final double progress; // 0.0 to 1.0
+  final double width;
+
+  _SweepLinePainter({
+    required this.offsets,
+    required this.progress,
+    required this.width,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (offsets.isEmpty || progress <= 0 || progress >= 1) return;
+
+    final sweepX = width * progress;
+    final sweepWidth = 120.0; // Ancho del haz de luz
+
+    // Dibujar el efecto de brillo sobre cada segmento de línea
+    for (int i = 0; i < offsets.length - 1; i++) {
+      final p0 = offsets[i];
+      final p1 = offsets[i + 1];
+
+      // Calcular si el sweep intersecta con este segmento
+      final segmentMinX = math.min(p0.dx, p1.dx);
+      final segmentMaxX = math.max(p0.dx, p1.dx);
+
+      if (sweepX >= segmentMinX - sweepWidth / 2 && sweepX <= segmentMaxX + sweepWidth / 2) {
+        // El sweep está sobre este segmento
+        final segmentCenterX = (p0.dx + p1.dx) / 2;
+        final distanceFromCenter = (sweepX - segmentCenterX).abs();
+        final segmentLength = (p1.dx - p0.dx).abs();
+        final maxDistance = segmentLength / 2 + sweepWidth / 2;
+
+        final intensity = 1.0 - (distanceFromCenter / maxDistance).clamp(0.0, 1.0);
+
+        if (intensity > 0.05) {
+          // Gradiente de brillo sobre la línea
+          final gradient = ui.Gradient.linear(
+            Offset(sweepX - sweepWidth / 2, p0.dy),
+            Offset(sweepX + sweepWidth / 2, p1.dy),
+            [
+              Colors.white.withOpacity(0),
+              Colors.white.withOpacity(0.7 * intensity),
+              Colors.white.withOpacity(0),
+            ],
+            [0.0, 0.5, 1.0],
+          );
+
+          final glowPaint = Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 8.0
+            ..shader = gradient
+            ..strokeCap = StrokeCap.round
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+          final brightPaint = Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 4.0
+            ..shader = gradient
+            ..strokeCap = StrokeCap.round;
+
+          final path = Path()
+            ..moveTo(p0.dx, p0.dy)
+            ..lineTo(p1.dx, p1.dy);
+
+          canvas.drawPath(path, glowPaint);
+          canvas.drawPath(path, brightPaint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SweepLinePainter oldDelegate) =>
+    oldDelegate.progress != progress || oldDelegate.offsets != offsets;
 }
 
 class _BubblesShimmer extends StatefulWidget {
