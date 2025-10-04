@@ -48,8 +48,17 @@ class ApiService {
               return handler.resolve(res);
             } catch (_) {}
           } else {
-            final cb = AuthBridge.onRefreshFailed;
-            if (cb != null) await cb();
+            // Distinguir entre refresh token inválido vs errores transitorios
+            final statusCode = err.response?.statusCode;
+
+            // Solo llamar onRefreshFailed si es definitivamente un token inválido
+            // (400 Bad Request o 401 Unauthorized en el propio refresh)
+            if (statusCode == 400 || statusCode == 401) {
+              final cb = AuthBridge.onRefreshFailed;
+              if (cb != null) await cb();
+            }
+            // Para errores 5xx o de red, NO cerrar sesión
+            // El usuario puede reintentar la operación manualmente
           }
         }
         handler.next(err);
@@ -118,10 +127,13 @@ class ApiService {
             data: {'refreshToken': _refreshToken},
             options: Options(validateStatus: (code) => true));
       } on DioException {
-        // Error de red: aplicar backoff pero NO cerrar sesión
+        // Error de red (timeout, conexión, etc.): aplicar backoff exponencial pero NO cerrar sesión
+        // El refresh token sigue siendo válido, solo hay problemas de conectividad
         _consecutiveRefreshFailures += 1;
-        final backoff = Duration(seconds: 5 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
+        // Backoff más generoso para errores de red: 10s, 20s, 40s, 60s max
+        final backoff = Duration(seconds: 10 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
         _refreshCooldownUntil = DateTime.now().toUtc().add(backoff);
+        // NO llamar onRefreshFailed para errores de red
         return false;
       }
       if (r.statusCode == 200) {
@@ -148,11 +160,17 @@ class ApiService {
       Duration backoff;
       if (r.statusCode == 429) {
         backoff = Duration(seconds: 30 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 8));
+      } else if (r.statusCode == 401 || r.statusCode == 400) {
+        // Refresh token definitivamente inválido: backoff corto antes de logout
+        backoff = const Duration(seconds: 2);
       } else {
-        backoff = Duration(seconds: 5 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
+        // Error 5xx o de red: backoff exponencial para reintentos
+        backoff = Duration(seconds: 10 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
       }
       _refreshCooldownUntil = DateTime.now().toUtc().add(backoff);
-      // Disparar política tolerante solo si el refresh es inválido (400/401)
+
+      // Solo disparar política de logout si el refresh token es definitivamente inválido (400/401)
+      // NO para errores 5xx del servidor o problemas de red
       if (r.statusCode == 401 || r.statusCode == 400) {
         final cb = AuthBridge.onRefreshFailed;
         if (cb != null) await cb();

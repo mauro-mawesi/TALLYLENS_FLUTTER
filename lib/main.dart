@@ -14,6 +14,7 @@ import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:recibos_flutter/core/services/privacy_controller.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:recibos_flutter/core/locale/onboarding_controller.dart';
+import 'package:recibos_flutter/features/splash/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,12 +48,21 @@ class _MyAppState extends State<MyApp> {
   late final GoRouter _router;
   late final AuthService _auth;
   DateTime? _backgroundAt;
+  bool _showSplash = true;
 
   @override
   void initState() {
     super.initState();
     _auth = sl<AuthService>();
     _router = createRouter(_auth);
+
+    // Ocultar splash después de 3 segundos
+    Future.delayed(const Duration(milliseconds: 3000), () {
+      if (mounted) {
+        setState(() => _showSplash = false);
+      }
+    });
+
     WidgetsBinding.instance.addObserver(_LifecycleHandlerSmart(
       auth: _auth,
       onBackground: () => _backgroundAt = DateTime.now(),
@@ -72,6 +82,14 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Mostrar splash screen al inicio
+    if (_showSplash) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: SplashScreen(),
+      );
+    }
+
     final darkTextTheme = GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).apply(
       bodyColor: FlowColors.textDark,
       displayColor: FlowColors.textDark,

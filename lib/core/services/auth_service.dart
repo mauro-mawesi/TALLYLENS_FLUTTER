@@ -234,23 +234,28 @@ class AuthService with ChangeNotifier {
   bool get hasRefreshToken => _refreshToken != null && _refreshToken!.isNotEmpty;
 
   /// Maneja 401 globales distinguiendo casos sin refresh y loops.
+  /// Política tolerante: mantener sesión como Instagram (solo logout manual o refresh inválido)
   Future<void> handleUnauthorized() async {
     if (!isLoggedIn) return;
     if (!hasRefreshToken) {
       await logout();
       return;
     }
-    // Primer intento: forzar lock para desbloqueo biométrico
-    forceLock();
+
+    // Intentar refresh silencioso primero (sin forzar lock)
     final now = DateTime.now();
-    // Ventana de tolerancia ampliada a 30s y umbral 3
-    if (_firstUnauthAt == null || now.difference(_firstUnauthAt!) > const Duration(seconds: 30)) {
+
+    // Ventana ampliada a 60 segundos y umbral aumentado a 5 intentos
+    // para tolerar errores de red transitorios
+    if (_firstUnauthAt == null || now.difference(_firstUnauthAt!) > const Duration(seconds: 60)) {
       _firstUnauthAt = now;
       _unauthCount = 1;
     } else {
       _unauthCount++;
-      if (_unauthCount >= 3) {
-        // Demasiados 401 seguidos en corto tiempo: probablemente refresh inválido
+
+      // Solo hacer logout si es claramente un refresh token inválido
+      // NO por errores de red transitorios o problemas temporales del servidor
+      if (_unauthCount >= 5) {
         await logout();
         _unauthCount = 0;
         _firstUnauthAt = null;
