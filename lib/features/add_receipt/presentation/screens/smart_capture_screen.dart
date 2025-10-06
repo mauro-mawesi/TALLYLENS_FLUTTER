@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:recibos_flutter/core/theme/app_colors.dart';
 
 class SmartCaptureScreen extends StatefulWidget {
   const SmartCaptureScreen({super.key});
@@ -121,7 +122,10 @@ class _SmartCaptureScreenState extends State<SmartCaptureScreen> with WidgetsBin
                       final v = _overlayController.value; // 0..1
                       final glow = 6 + 10 * v;
                       return CustomPaint(
-                        painter: _NeonRectPainter(glow: glow),
+                        painter: _NeonRectPainter(
+                          glow: glow,
+                          neonColor: FlowColors.secondary(context),
+                        ),
                       );
                     },
                   ),
@@ -177,7 +181,9 @@ class _SmartCaptureScreenState extends State<SmartCaptureScreen> with WidgetsBin
 
 class _NeonRectPainter extends CustomPainter {
   final double glow;
-  _NeonRectPainter({required this.glow});
+  final Color neonColor;
+
+  _NeonRectPainter({required this.glow, required this.neonColor});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -186,17 +192,18 @@ class _NeonRectPainter extends CustomPainter {
     final rect = Rect.fromLTWH(w * 0.08, h * 0.16, w * 0.84, h * 0.56);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(12));
     final glowPaint = Paint()
-      ..color = const Color(0xFF00FF7F).withOpacity(0.6)
+      ..color = neonColor.withOpacity(0.6)
       ..maskFilter = MaskFilter.blur(BlurStyle.outer, glow);
     canvas.drawRRect(rrect, glowPaint);
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..color = const Color(0xFF00FF7F);
+      ..color = neonColor;
     canvas.drawRRect(rrect, stroke);
   }
 
   @override
-  bool shouldRepaint(covariant _NeonRectPainter oldDelegate) => oldDelegate.glow != glow;
+  bool shouldRepaint(covariant _NeonRectPainter oldDelegate) =>
+    oldDelegate.glow != glow || oldDelegate.neonColor != neonColor;
 }

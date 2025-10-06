@@ -210,99 +210,49 @@ class _ReceiptDetailView extends StatelessWidget {
                 if (items.isEmpty)
                   SliverFillRemaining(child: Center(child: Text(t.noProducts)))
                 else
-                  SliverPadding(
-                    padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 24),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final it = items[index];
-                          final name = it.product?.name ?? it.originalText ?? t.product;
-                          final qty = it.quantity ?? 1;
-                          final unit = it.unit ?? '';
-                          final unitPrice = it.unitPrice ?? 0;
-                          final total = it.totalPrice ?? (qty * unitPrice);
-                          final itemFmt = NumberFormat.simpleCurrency(
-                            locale: locale,
-                            name: it.currency ?? receipt.currency,
-                          );
-                          final unitPriceStr = itemFmt.format(unitPrice);
-                          final totalStr = itemFmt.format(total);
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                            child: GlassCard(
-                              borderRadius: 20,
-                              padding: const EdgeInsets.only(left: 12, right: 12, top: 8, bottom: 4),
-                              child: ListTile(
-                                isThreeLine: true,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                minVerticalPadding: 8,
-                                onTap: () {
-                                  final productId = it.product?.id ?? it.productId;
-                                  if (productId != null && productId.isNotEmpty) {
-                                    context.push(
-                                      '/analytics/product',
-                                      extra: {
-                                        'productId': productId,
-                                        'name': it.product?.name ?? it.originalText,
-                                      },
-                                    );
-                                  }
-                                },
-                                onLongPress: () {
-                                  final next = !(it.isVerified ?? false);
-                                  context.read<ReceiptDetailBloc>().add(
-                                        ToggleItemVerified(receiptId: it.receiptId, itemId: it.id, isVerified: next),
-                                      );
-                                },
-                                leading: Container(
-                                  width: 42,
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: cs.secondary.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(Icons.shopping_bag_outlined, color: cs.secondary),
-                                ),
-                                title: Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: FlowColors.text(context)),
-                                ),
-                                subtitle: Text(
-                                  '${qty.toStringAsFixed(qty.truncateToDouble() == qty ? 0 : 2)} $unit × $unitPriceStr',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FlowColors.textSecondary(context)),
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      totalStr,
-                                      style: const TextStyle(color: FlowColors.primary, fontWeight: FontWeight.w700, fontSize: 16),
-                                    ),
-                                    if (it.isVerified ?? false)
-                                      const Padding(
-                                        padding: EdgeInsets.only(left: 6),
-                                        child: Icon(Icons.check_circle, size: 16, color: FlowColors.primary),
-                                      ),
-                                    const SizedBox(width: 6),
-                                    IconButton(
-                                      iconSize: 18,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                                      tooltip: AppLocalizations.of(context)!.editReceiptTitle,
-                                      icon: const Icon(Icons.edit_outlined),
-                                      onPressed: () => _openEditItemSheet(context, it),
-                                    ),
-                                  ],
-                                ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4, bottom: 8, top: 8),
+                            child: Text(
+                              t.products,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: FlowColors.text(context),
                               ),
                             ),
-                          );
-                        },
-                        childCount: items.length,
+                          ),
+                          GlassCard(
+                            borderRadius: 20,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            color: FlowColors.glassTint(context),
+                            child: Column(
+                              children: [
+                                for (var i = 0; i < items.length; i++) ...[
+                                  _ItemTile(
+                                    item: items[i],
+                                    receipt: receipt,
+                                    locale: locale,
+                                    t: t,
+                                    cs: cs,
+                                  ),
+                                  if (i < items.length - 1)
+                                    Divider(
+                                      height: 1,
+                                      indent: 16,
+                                      endIndent: 16,
+                                      thickness: 0.8,
+                                      color: FlowColors.divider(context),
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -313,6 +263,114 @@ class _ReceiptDetailView extends StatelessWidget {
           },
         ),
         ),
+      ),
+    );
+  }
+}
+
+class _ItemTile extends StatelessWidget {
+  final ReceiptItem item;
+  final Receipt receipt;
+  final String locale;
+  final AppLocalizations t;
+  final ColorScheme cs;
+
+  const _ItemTile({
+    required this.item,
+    required this.receipt,
+    required this.locale,
+    required this.t,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = item.product?.name ?? item.originalText ?? t.product;
+    final qty = item.quantity ?? 1;
+    final unit = item.unit ?? '';
+    final unitPrice = item.unitPrice ?? 0;
+    final total = item.totalPrice ?? (qty * unitPrice);
+    final itemFmt = NumberFormat.simpleCurrency(
+      locale: locale,
+      name: item.currency ?? receipt.currency,
+    );
+    final unitPriceStr = itemFmt.format(unitPrice);
+    final totalStr = itemFmt.format(total);
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      onTap: () {
+        final productId = item.product?.id ?? item.productId;
+        if (productId != null && productId.isNotEmpty) {
+          context.push(
+            '/analytics/product',
+            extra: {
+              'productId': productId,
+              'name': item.product?.name ?? item.originalText,
+            },
+          );
+        }
+      },
+      onLongPress: () {
+        final next = !(item.isVerified ?? false);
+        context.read<ReceiptDetailBloc>().add(
+          ToggleItemVerified(receiptId: item.receiptId, itemId: item.id, isVerified: next),
+        );
+      },
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: cs.secondary.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.shopping_bag_outlined, color: cs.secondary),
+      ),
+      title: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: FlowColors.text(context),
+        ),
+      ),
+      subtitle: Text(
+        '${qty.toStringAsFixed(qty.truncateToDouble() == qty ? 0 : 2)} $unit × $unitPriceStr',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: FlowColors.textSecondary(context),
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                totalStr,
+                style: const TextStyle(
+                  color: FlowColors.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              if (item.isVerified ?? false)
+                const Icon(Icons.check_circle, size: 14, color: FlowColors.primary),
+            ],
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            iconSize: 18,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            tooltip: t.editReceiptTitle,
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => _openEditItemSheet(context, item),
+          ),
+        ],
       ),
     );
   }

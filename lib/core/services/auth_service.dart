@@ -152,6 +152,20 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  /// Refresh user profile from server (e.g., after updating profile photo)
+  Future<void> refreshProfile() async {
+    try {
+      final data = await _api.getMeRaw();
+      final user = data['user'] as Map<String, dynamic>?;
+      if (user != null) {
+        _profile = UserProfile.fromJson(user);
+        notifyListeners();
+      }
+    } catch (e) {
+      throw Exception('Failed to refresh profile: $e');
+    }
+  }
+
   Future<bool> unlock({String? localizedReason}) async {
     if (!_biometricEnabled) {
       _locked = false;

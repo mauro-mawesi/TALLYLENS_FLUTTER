@@ -9,6 +9,7 @@ import 'package:recibos_flutter/core/services/receipt_service.dart';
 import 'dart:io';
 import 'package:recibos_flutter/core/services/errors.dart';
 import 'package:recibos_flutter/core/services/connectivity_service.dart';
+import 'package:recibos_flutter/core/services/sync_service.dart';
 
 class ProcessingScreen extends StatefulWidget {
   final String? receiptId;
@@ -35,6 +36,7 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   String _statusText = '';
   int _step = 0;
   String? _receiptId;
+  String? _localId; // ID local offline mientras se sincroniza
   String? _localImagePath;
   bool _processedByMLKit = false;
   String? _source; // 'camera' | 'gallery'
@@ -117,15 +119,20 @@ class _ProcessingScreenState extends State<ProcessingScreen>
             ? (created['data'] as Map<String, dynamic>? ?? created)
             : <String, dynamic>{};
         final id = (data['id'] ?? '').toString();
-        if (id.isNotEmpty) {
-          setState(() {
-            _receiptId = id;
-            final t2 = AppLocalizations.of(context);
-            _statusText = t2?.processingAnalyzing ?? 'Analyzing your receipt...';
-          });
-          _startPolling();
-          return;
-        }
+        final isOffline = (data['_isOffline'] == true) || (data['syncStatus'] == 'pending');
+        setState(() {
+          // Si es offline-first, el id es local; esperar a que SyncService asigne serverId
+          if (isOffline) {
+            _localId = id.isNotEmpty ? id : null;
+            _receiptId = null;
+          } else {
+            _receiptId = id.isNotEmpty ? id : null;
+          }
+          final t2 = AppLocalizations.of(context);
+          _statusText = t2?.processingAnalyzing ?? 'Analyzing your receipt...';
+        });
+        _startPolling();
+        return;
       } on DuplicateReceiptException catch (e) {
         // Ofrecer opciones: ver existente o crear de todos modos
         if (!mounted) return;
@@ -207,8 +214,24 @@ class _ProcessingScreenState extends State<ProcessingScreen>
 
   Future<void> _poll() async {
     try {
+      // Resolver serverId si aún no lo tenemos
+      if ((_receiptId == null || _receiptId!.isEmpty) && _localId != null) {
+        final box = sl<SyncService>().offlineBox;
+        final rec = box?.get(_localId!);
+        final srvId = rec?.serverId;
+        if (srvId != null && srvId.isNotEmpty) {
+          _receiptId = srvId;
+        } else {
+          _scheduleNextPoll();
+          return;
+        }
+      }
+
       final id = _receiptId;
-      if (id == null || id.isEmpty) return;
+      if (id == null || id.isEmpty) {
+        _scheduleNextPoll();
+        return;
+      }
       // Offline: esperar reconexión sin insistir
       if (!_conn.isOnline) {
         _scheduleNextPoll(immediate: false, offline: true);
@@ -239,7 +262,12 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         _timer?.cancel();
         return;
       }
-      // Error de red u otro: aplicar backoff exponencial
+      // Si aún no existe en backend (404), seguir esperando sin mostrar error
+      if (e.toString().contains('NotFoundException')) {
+        _scheduleNextPoll();
+        return;
+      }
+      // Error de red u otro: aplicar backoff exponencial y notificar
       _backoffSec = (_backoffSec * 2).clamp(2, _maxBackoffSec);
       _scheduleNextPoll();
       if (mounted) {

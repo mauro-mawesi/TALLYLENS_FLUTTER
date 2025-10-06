@@ -65,13 +65,16 @@ class _ProfileTopHeroState extends State<ProfileTopHero> {
       final editedFile = File('${tempDir.parent.path}/edited_${DateTime.now().millisecondsSinceEpoch}.jpg');
       await editedFile.writeAsBytes(result.$1);
 
-      // Upload
-      final imageUrl = await photoService.uploadProfilePhoto(editedFile);
-      await photoService.updateProfilePhoto(imageUrl);
+      // Upload and update
+      final relativePath = await photoService.uploadProfilePhoto(editedFile);
+      await photoService.updateProfilePhoto(relativePath);
+
+      // Reload user profile to get the signed URL
+      await sl<AuthService>().refreshProfile();
 
       if (mounted) {
         setState(() {
-          _profileImageUrl = imageUrl;
+          _profileImageUrl = sl<AuthService>().profile?.profileImageUrl;
           _isUploading = false;
         });
 
@@ -161,7 +164,7 @@ class _ProfileTopHeroState extends State<ProfileTopHero> {
     final cs = Theme.of(context).colorScheme;
     // Pintamos los ornamentos detrás usando CustomPaint que se ajusta al tamaño del contenido.
     return Padding(
-      padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+      padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
       child: CustomPaint(
         painter: _OrnamentsPainter(cs.primary.withOpacity(0.08)),
         child: Column(
@@ -243,7 +246,10 @@ class _AvatarRing extends StatelessWidget {
                 child: imageUrl != null && imageUrl!.isNotEmpty
                     ? Image.network(
                         imageUrl!,
+                        key: ValueKey(imageUrl), // Preserva la imagen cuando el widget se reconstruye
                         fit: BoxFit.cover,
+                        cacheWidth: 200,
+                        cacheHeight: 200,
                         errorBuilder: (_, __, ___) => Center(
                           child: Text(
                             initials,
@@ -359,18 +365,42 @@ class _Badge extends StatelessWidget {
   }
 }
 
-class _StatsRow extends StatelessWidget {
+class _StatsRow extends StatefulWidget {
   const _StatsRow();
+
+  @override
+  State<_StatsRow> createState() => _StatsRowState();
+}
+
+class _StatsRowState extends State<_StatsRow> with AutomaticKeepAliveClientMixin {
+  late Future<Map<String, dynamic>> _statsFuture;
+  Map<String, dynamic>? _cachedData;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _statsFuture = sl<ApiService>().getReceiptStats(days: 365);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final api = sl<ApiService>();
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final locale = Localizations.localeOf(context).toLanguageTag();
     final currency = NumberFormat.simpleCurrency(locale: locale);
     final t = AppLocalizations.of(context)!;
     return FutureBuilder<Map<String, dynamic>>(
-      future: api.getReceiptStats(days: 365),
+      future: _statsFuture,
       builder: (context, snap) {
-        final totals = (snap.data?['totals'] as Map?) ?? const {};
+        // Cache data when available and use cached data during rebuilds
+        if (snap.hasData) {
+          _cachedData = snap.data;
+        }
+
+        final dataToUse = _cachedData ?? snap.data;
+        final totals = (dataToUse?['totals'] as Map?) ?? const {};
         final receipts = int.tryParse((totals['totalReceipts'] ?? '0').toString()) ?? 0;
         final totalSpent = double.tryParse((totals['totalSpent'] ?? '0').toString()) ?? 0;
         final uniqueProducts = int.tryParse((totals['uniqueProducts'] ?? '0').toString()) ?? 0;

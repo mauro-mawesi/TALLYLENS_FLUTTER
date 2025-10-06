@@ -11,6 +11,7 @@ class ReceiptsListBloc extends Bloc<ReceiptsListEvent, ReceiptsListState> {
   String? _merchant;
   DateTimeRange? _dateRange;
   RangeValues? _amountRange;
+  bool _isFetching = false;
 
   ReceiptsListBloc({required ReceiptService receiptService})
       : _receiptService = receiptService,
@@ -23,11 +24,15 @@ class ReceiptsListBloc extends Bloc<ReceiptsListEvent, ReceiptsListState> {
     FetchReceipts event,
     Emitter<ReceiptsListState> emit,
   ) async {
+    // Evitar peticiones duplicadas simultáneas
+    if (_isFetching) return;
+
     _category = event.category;
     _merchant = event.merchant;
     _dateRange = event.dateRange;
     _amountRange = event.amountRange;
     try {
+      _isFetching = true;
       // 1. Emite el estado de carga para que la UI muestre un shimmer/spinner.
       emit(ReceiptsListLoading());
       // 2. Llama al servicio para obtener la primera página (con cache si existe)
@@ -54,6 +59,8 @@ class ReceiptsListBloc extends Bloc<ReceiptsListEvent, ReceiptsListState> {
     } catch (e) {
       // 4. Si ocurre un error, emite el estado de error.
       emit(ReceiptsListError(e.toString()));
+    } finally {
+      _isFetching = false;
     }
   }
 

@@ -15,6 +15,9 @@ import 'package:recibos_flutter/core/services/privacy_controller.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:recibos_flutter/core/locale/onboarding_controller.dart';
 import 'package:recibos_flutter/features/splash/splash_screen.dart';
+import 'package:recibos_flutter/core/services/widget_service.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:animated_theme_switcher/animated_theme_switcher.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +36,26 @@ Future<void> main() async {
     api.setLocaleCode(lc.locale!.languageCode);
   }
   await sl<AuthService>().init();
+
+  // Inicializar widget service
+  final widgetService = sl<WidgetService>();
+  widgetService.registerCallbacks();
+
+  // Actualizar widgets si el usuario está autenticado
+  if (sl<AuthService>().isLoggedIn) {
+    widgetService.updateWidgets();
+  }
+
   runApp(const MyApp());
+}
+
+// Callback para deep links desde widgets
+@pragma("vm:entry-point")
+void backgroundCallback(Uri? uri) async {
+  if (uri != null && uri.scheme == 'receipts' && uri.host == 'scan') {
+    // El deep link se manejará en el router
+    await HomeWidget.setAppGroupId('group.com.recibos.app');
+  }
 }
 
 
@@ -81,6 +103,249 @@ class _MyAppState extends State<MyApp> {
   }
 
   @override
+  void dispose() {
+    super.dispose();
+  }
+
+  ThemeData _buildLightTheme(TextTheme textTheme) {
+    final lightCS = const ColorScheme.light(
+      primary: FlowColors.primary,
+      secondary: FlowColors.secondaryLight,
+      surface: Color(0xFFFFFFFF),
+      background: Color(0xFFF7F8FA),
+    );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: lightCS,
+      scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+      textTheme: textTheme,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
+          TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+          TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
+          TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+        },
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        titleTextStyle: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
+      cardTheme: CardTheme(
+        color: Colors.white,
+        elevation: 0,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        iconColor: Colors.black54,
+        textColor: Colors.black87,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: FlowColors.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.disabled)) {
+              return lightCS.primary.withOpacity(0.38);
+            }
+            return lightCS.primary;
+          }),
+          foregroundColor: MaterialStatePropertyAll(lightCS.onPrimary),
+          overlayColor: MaterialStatePropertyAll(lightCS.onPrimary.withOpacity(0.1)),
+          shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          padding: const MaterialStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: MaterialStatePropertyAll(lightCS.primary),
+          side: MaterialStatePropertyAll(BorderSide(color: lightCS.outline)),
+          overlayColor: MaterialStatePropertyAll(lightCS.primary.withOpacity(0.08)),
+          shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: MaterialStatePropertyAll(lightCS.primary),
+          overlayColor: MaterialStatePropertyAll(lightCS.primary.withOpacity(0.08)),
+          shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.disabled)) {
+              return lightCS.onSurface.withOpacity(0.38);
+            }
+            return lightCS.onSurface;
+          }),
+          overlayColor: MaterialStatePropertyAll(lightCS.primary.withOpacity(0.08)),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFFF1F5F9),
+        hintStyle: const TextStyle(color: Color(0xFF9E9EAA)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: FlowColors.primary, width: 1.4),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: lightCS.inverseSurface,
+        contentTextStyle: TextStyle(color: lightCS.onInverseSurface),
+        actionTextColor: lightCS.inversePrimary,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: Color(0xFF4F46E5),
+        foregroundColor: Colors.white,
+        elevation: 3,
+        shape: CircleBorder(),
+      ),
+    );
+  }
+
+  ThemeData _buildDarkTheme(TextTheme textTheme) {
+    final darkCS = const ColorScheme.dark(
+      primary: FlowColors.primary,
+      secondary: FlowColors.secondaryDark,
+      surface: Color(0xFF121A2A),
+      background: FlowColors.backgroundDark,
+    );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: darkCS,
+      scaffoldBackgroundColor: FlowColors.backgroundDark,
+      textTheme: textTheme,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
+          TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+          TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
+          TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+        },
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        titleTextStyle: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        iconTheme: const IconThemeData(color: FlowColors.textDark),
+      ),
+      cardTheme: CardTheme(
+        color: const Color(0xFF121A2A),
+        elevation: 0,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        iconColor: Color(0xFF9E9EAA),
+        textColor: FlowColors.textDark,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: FlowColors.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.disabled)) {
+              return darkCS.primary.withOpacity(0.38);
+            }
+            return darkCS.primary;
+          }),
+          foregroundColor: MaterialStatePropertyAll(darkCS.onPrimary),
+          overlayColor: MaterialStatePropertyAll(darkCS.onPrimary.withOpacity(0.12)),
+          shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          padding: const MaterialStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: MaterialStatePropertyAll(darkCS.primary),
+          side: MaterialStatePropertyAll(BorderSide(color: darkCS.outline)),
+          overlayColor: MaterialStatePropertyAll(darkCS.primary.withOpacity(0.10)),
+          shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: MaterialStatePropertyAll(darkCS.primary),
+          overlayColor: MaterialStatePropertyAll(darkCS.primary.withOpacity(0.10)),
+          shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.disabled)) {
+              return darkCS.onSurface.withOpacity(0.38);
+            }
+            return darkCS.onSurface;
+          }),
+          overlayColor: MaterialStatePropertyAll(darkCS.primary.withOpacity(0.12)),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: darkCS.surfaceVariant.withOpacity(0.18),
+        hintStyle: const TextStyle(color: FlowColors.textSecondaryDark),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: darkCS.outline.withOpacity(0.2)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: darkCS.outline.withOpacity(0.2)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: FlowColors.primary, width: 1.2),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: darkCS.inverseSurface.withOpacity(0.92),
+        contentTextStyle: TextStyle(color: darkCS.onInverseSurface),
+        actionTextColor: darkCS.inversePrimary,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: Color(0xFF4F46E5),
+        foregroundColor: Colors.white,
+        elevation: 3,
+        shape: CircleBorder(),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Mostrar splash screen al inicio
     if (_showSplash) {
@@ -100,266 +365,42 @@ class _MyAppState extends State<MyApp> {
     );
 
     final privacy = sl<PrivacyController>();
+
     return AnimatedBuilder(
       animation: Listenable.merge([themeController, sl<LocaleController>(), privacy]),
-      builder: (context, _) => MaterialApp.router(
-      title: AppLocalizations.of(context)?.appTitle ?? 'Receipts App',
-      debugShowCheckedModeBanner: false,
-        locale: sl<LocaleController>().locale,
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [
-          Locale('en'),
-          Locale('es'),
-          Locale('nl'),
-        ],
-        builder: (context, child) => Stack(children: [
-          if (child != null) child,
-          BlurOverlay(controller: privacy),
-        ]),
-        theme: () {
-          final lightCS = const ColorScheme.light(
-            primary: FlowColors.primary,
-            secondary: FlowColors.secondaryLight,
-            surface: Color(0xFFFFFFFF),
-            background: Color(0xFFF7F8FA),
-          );
-          return ThemeData(
-          useMaterial3: true,
-          colorScheme: lightCS,
-          scaffoldBackgroundColor: const Color(0xFFF7F8FA),
-          textTheme: lightTextTheme,
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.android: ZoomPageTransitionsBuilder(),
-              TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
-              TargetPlatform.linux: ZoomPageTransitionsBuilder(),
-              TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
-              TargetPlatform.windows: ZoomPageTransitionsBuilder(),
-            },
-          ),
-          appBarTheme: AppBarTheme(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            titleTextStyle: lightTextTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            iconTheme: const IconThemeData(color: Colors.black87),
-          ),
-          cardTheme: CardTheme(
-            color: Colors.white,
-            elevation: 0,
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          ),
-          listTileTheme: const ListTileThemeData(
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            iconColor: Colors.black54,
-            textColor: Colors.black87,
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: FlowColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-            ),
-          ),
-          filledButtonTheme: FilledButtonThemeData(
-            style: ButtonStyle(
-              backgroundColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.disabled)) {
-                  return lightCS.primary.withOpacity(0.38);
-                }
-                return lightCS.primary;
-              }),
-              foregroundColor: MaterialStatePropertyAll(lightCS.onPrimary),
-              overlayColor: MaterialStatePropertyAll(lightCS.onPrimary.withOpacity(0.1)),
-              shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              padding: const MaterialStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
-            ),
-          ),
-          outlinedButtonTheme: OutlinedButtonThemeData(
-            style: ButtonStyle(
-              foregroundColor: MaterialStatePropertyAll(lightCS.primary),
-              side: MaterialStatePropertyAll(BorderSide(color: lightCS.outline)),
-              overlayColor: MaterialStatePropertyAll(lightCS.primary.withOpacity(0.08)),
-              shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: ButtonStyle(
-              foregroundColor: MaterialStatePropertyAll(lightCS.primary),
-              overlayColor: MaterialStatePropertyAll(lightCS.primary.withOpacity(0.08)),
-              shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            ),
-          ),
-          iconButtonTheme: IconButtonThemeData(
-            style: ButtonStyle(
-              foregroundColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.disabled)) {
-                  return lightCS.onSurface.withOpacity(0.38);
-                }
-                return lightCS.onSurface;
-              }),
-              overlayColor: MaterialStatePropertyAll(lightCS.primary.withOpacity(0.08)),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFFF1F5F9),
-            hintStyle: const TextStyle(color: Color(0xFF9E9EAA)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: const BorderSide(color: FlowColors.primary, width: 1.4),
-            ),
-          ),
-          snackBarTheme: SnackBarThemeData(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: lightCS.inverseSurface,
-            contentTextStyle: TextStyle(color: lightCS.onInverseSurface),
-            actionTextColor: lightCS.inversePrimary,
-          ),
-          floatingActionButtonTheme: const FloatingActionButtonThemeData(
-            backgroundColor: Color(0xFF4F46E5),
-            foregroundColor: Colors.white,
-            elevation: 3,
-            shape: CircleBorder(),
-          ),
+      builder: (context, _) {
+        final isDark = themeController.isDark;
+        final initTheme = isDark ? _buildDarkTheme(darkTextTheme) : _buildLightTheme(lightTextTheme);
+
+        return ThemeProvider(
+          initTheme: initTheme,
+          duration: const Duration(milliseconds: 400),
+          builder: (context, theme) {
+            return MaterialApp.router(
+              title: 'TallyLens',
+              debugShowCheckedModeBanner: false,
+              locale: sl<LocaleController>().locale,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [
+                Locale('en'),
+                Locale('es'),
+                Locale('nl'),
+              ],
+              builder: (context, child) => Stack(children: [
+                if (child != null) child,
+                BlurOverlay(controller: privacy),
+              ]),
+              theme: theme,
+              routerConfig: _router,
+            );
+          },
         );
-        }(),
-        darkTheme: () {
-          final darkCS = const ColorScheme.dark(
-            primary: FlowColors.primary,
-            secondary: FlowColors.secondaryDark,
-            surface: Color(0xFF121A2A),
-            background: FlowColors.backgroundDark,
-          );
-          return ThemeData(
-          useMaterial3: true,
-          colorScheme: darkCS,
-          scaffoldBackgroundColor: FlowColors.backgroundDark,
-          textTheme: darkTextTheme,
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.android: ZoomPageTransitionsBuilder(),
-              TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
-              TargetPlatform.linux: ZoomPageTransitionsBuilder(),
-              TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
-              TargetPlatform.windows: ZoomPageTransitionsBuilder(),
-            },
-          ),
-          appBarTheme: AppBarTheme(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            titleTextStyle: darkTextTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            iconTheme: const IconThemeData(color: FlowColors.textDark),
-          ),
-          cardTheme: CardTheme(
-            color: const Color(0xFF121A2A),
-            elevation: 0,
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          ),
-          listTileTheme: const ListTileThemeData(
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            iconColor: Color(0xFF9E9EAA),
-            textColor: FlowColors.textDark,
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: FlowColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-            ),
-          ),
-          filledButtonTheme: FilledButtonThemeData(
-            style: ButtonStyle(
-              backgroundColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.disabled)) {
-                  return darkCS.primary.withOpacity(0.38);
-                }
-                return darkCS.primary;
-              }),
-              foregroundColor: MaterialStatePropertyAll(darkCS.onPrimary),
-              overlayColor: MaterialStatePropertyAll(darkCS.onPrimary.withOpacity(0.12)),
-              shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              padding: const MaterialStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
-            ),
-          ),
-          outlinedButtonTheme: OutlinedButtonThemeData(
-            style: ButtonStyle(
-              foregroundColor: MaterialStatePropertyAll(darkCS.primary),
-              side: MaterialStatePropertyAll(BorderSide(color: darkCS.outline)),
-              overlayColor: MaterialStatePropertyAll(darkCS.primary.withOpacity(0.10)),
-              shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: ButtonStyle(
-              foregroundColor: MaterialStatePropertyAll(darkCS.primary),
-              overlayColor: MaterialStatePropertyAll(darkCS.primary.withOpacity(0.10)),
-              shape: MaterialStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            ),
-          ),
-          iconButtonTheme: IconButtonThemeData(
-            style: ButtonStyle(
-              foregroundColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.disabled)) {
-                  return darkCS.onSurface.withOpacity(0.38);
-                }
-                return darkCS.onSurface;
-              }),
-              overlayColor: MaterialStatePropertyAll(darkCS.primary.withOpacity(0.12)),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: darkCS.surfaceVariant.withOpacity(0.18),
-            hintStyle: const TextStyle(color: FlowColors.textSecondaryDark),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(color: darkCS.outline.withOpacity(0.2)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(color: darkCS.outline.withOpacity(0.2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: const BorderSide(color: FlowColors.primary, width: 1.2),
-            ),
-          ),
-          snackBarTheme: SnackBarThemeData(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: darkCS.inverseSurface.withOpacity(0.92),
-            contentTextStyle: TextStyle(color: darkCS.onInverseSurface),
-            actionTextColor: darkCS.inversePrimary,
-          ),
-          floatingActionButtonTheme: const FloatingActionButtonThemeData(
-            backgroundColor: Color(0xFF4F46E5),
-            foregroundColor: Colors.white,
-            elevation: 3,
-            shape: CircleBorder(),
-          ),
-        );
-        }(),
-      themeMode: themeController.mode,
-      routerConfig: _router,
-    ),
+      },
     );
   }
 }

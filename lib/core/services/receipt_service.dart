@@ -1,16 +1,30 @@
 import 'dart:io';
+import 'package:uuid/uuid.dart';
 import 'api_service.dart';
 import 'package:image/image.dart' as img;
 import 'package:recibos_flutter/core/services/receipts_cache.dart';
 import 'package:recibos_flutter/core/models/page_result.dart';
+import 'package:recibos_flutter/core/services/widget_service.dart';
+import 'package:recibos_flutter/core/services/sync_service.dart';
+import 'package:recibos_flutter/core/services/errors.dart';
 import 'dart:convert';
 
 /// Clase que maneja la lógica de negocio relacionada con los recibos.
 /// Orquesta las operaciones utilizando otros servicios de más bajo nivel.
+/// OFFLINE-FIRST: Guarda localmente primero, sincroniza después
 class ReceiptService {
   final ApiService _apiService;
+  final WidgetService? _widgetService;
+  final SyncService _syncService;
+  final _uuid = const Uuid();
 
-  ReceiptService({required ApiService apiService}) : _apiService = apiService;
+  ReceiptService({
+    required ApiService apiService,
+    WidgetService? widgetService,
+    required SyncService syncService,
+  })  : _apiService = apiService,
+        _widgetService = widgetService,
+        _syncService = syncService;
 
   /// Obtiene la lista de recibos desde la API.
   Future<List<dynamic>> getReceipts({
@@ -31,34 +45,89 @@ class ReceiptService {
     );
   }
 
-  /// Proceso completo para crear un nuevo recibo.
-  /// 1. Sube el archivo de la imagen.
-  /// 2. Crea el registro del recibo con la URL de la imagen.
-  /// 3. Invalida el cache de recibos para forzar refresh
+  /// Proceso completo para crear un nuevo recibo OFFLINE-FIRST.
+  /// 1. Guarda el recibo offline inmediatamente (Optimistic UI)
+  /// 2. Intenta subir la imagen y sincronizar con el servidor
+  /// 3. Si falla, el recibo queda pendiente de sincronización
+  /// 4. SyncService se encarga de reintentar automáticamente
   Future<Map<String, dynamic>> createNewReceipt(
     File imageFile, { bool processedByMLKit = false, String? source, bool? forceDuplicate }
   ) async {
     try {
-      // 1. Preparar (comprimir/redimensionar) y subir la imagen
-      final prepared = await _prepareImageForUpload(imageFile);
-      final imageUrl = await _apiService.uploadImage(prepared);
+      // Generar ID local único
+      final localId = _uuid.v4();
 
-      // 2. Crear el recibo con la URL obtenida
-      final newReceipt = await _apiService.createReceipt(
-        imageUrl,
+      // 1. OFFLINE-FIRST: Guardar recibo localmente PRIMERO
+      final offlineReceipt = await _syncService.saveOfflineReceipt(
+        localId: localId,
+        imageLocalPath: imageFile.path,
         processedByMLKit: processedByMLKit,
         source: source,
-        forceDuplicate: forceDuplicate,
       );
 
-      // 3. Invalidar cache para que la lista se actualice
+      // 2. Invalidar cache inmediatamente para mostrar el nuevo recibo
       await invalidateCache();
 
-      return newReceipt;
+      // 3. INTENTAR sincronizar en background (no bloquear UI)
+      _syncInBackground(imageFile, localId, processedByMLKit, source, forceDuplicate);
+
+      // 4. Retornar respuesta optimista
+      return {
+        'status': 'success',
+        'data': {
+          'id': localId,
+          'localId': localId,
+          'imageUrl': imageFile.path,
+          'processingStatus': 'pending',
+          'syncStatus': 'pending',
+          '_isOffline': true, // Flag para indicar que es offline
+        }
+      };
     } catch (e) {
-      // Aquí se podría añadir un manejo de errores más específico si fuera necesario.
       print('Error en createNewReceipt: $e');
       rethrow;
+    }
+  }
+
+  /// Sincroniza en background sin bloquear la UI
+  Future<void> _syncInBackground(
+    File imageFile,
+    String localId,
+    bool processedByMLKit,
+    String? source,
+    bool? forceDuplicate,
+  ) async {
+    try {
+      // 1. Preparar y subir imagen
+      final prepared = await _prepareImageForUpload(imageFile);
+      String? imageUrl;
+
+      try {
+        imageUrl = await _apiService.uploadImage(prepared);
+      } catch (uploadError) {
+        print('Error uploading image, will retry later: $uploadError');
+        // El SyncService reintentará automáticamente
+        return;
+      }
+
+      // 2. Actualizar recibo offline con la URL de la imagen
+      final offlineBox = _syncService.offlineBox;
+      final receipt = offlineBox?.get(localId);
+      if (receipt != null) {
+        receipt.imageUrl = imageUrl;
+        await receipt.save();
+      }
+
+      // 3. SyncService se encargará de crear el recibo en el servidor
+      // mediante el endpoint /receipts/sync
+      await _syncService.syncPendingReceipts();
+
+      // 4. Actualizar widgets
+      _widgetService?.updateWidgets();
+
+    } catch (e) {
+      print('Background sync error (will retry): $e');
+      // No hacer nada, el SyncService reintentará automáticamente
     }
   }
 

@@ -17,3 +17,10 @@ class DuplicateReceiptException implements Exception {
   @override
   String toString() => 'DuplicateReceiptException: $message';
 }
+
+class NotFoundException implements Exception {
+  final String message;
+  NotFoundException([this.message = 'Not found']);
+  @override
+  String toString() => 'NotFoundException: $message';
+}

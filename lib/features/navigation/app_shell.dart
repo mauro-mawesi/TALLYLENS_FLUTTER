@@ -13,7 +13,7 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> with SingleTickerProviderStateMixin {
-  static const _tabRoutes = ['/', '/dashboard', '/notifications', '/profile'];
+  static const _tabRoutes = ['/', '/dashboard', '/budgets', '/notifications', '/profile'];
   late final AnimationController _fabController;
   int _lastIndex = -1;
   String? _lastRoute;
@@ -95,18 +95,25 @@ class _AppShellState extends State<AppShell> with SingleTickerProviderStateMixin
             ),
             const SizedBox(width: 48), // espacio para el FAB
             _NavIcon(
-              icon: Icons.notifications_outlined,
-              activeIcon: Icons.notifications_outlined,
-              label: l10n?.notificationsTab ?? 'Alerts',
+              icon: Icons.account_balance_wallet_outlined,
+              activeIcon: Icons.account_balance_wallet,
+              label: 'Budgets',
               active: currentIndex == 2,
               onTap: () => _onTap(context, 2),
             ),
             _NavIcon(
-              icon: Icons.person_outline,
-              activeIcon: Icons.person_outline,
-              label: l10n?.profileTitle ?? 'Profile',
+              icon: Icons.notifications_outlined,
+              activeIcon: Icons.notifications,
+              label: l10n?.notificationsTab ?? 'Alerts',
               active: currentIndex == 3,
               onTap: () => _onTap(context, 3),
+            ),
+            _NavIcon(
+              icon: Icons.person_outline,
+              activeIcon: Icons.person,
+              label: l10n?.profileTitle ?? 'Profile',
+              active: currentIndex == 4,
+              onTap: () => _onTap(context, 4),
             ),
           ],
         ),

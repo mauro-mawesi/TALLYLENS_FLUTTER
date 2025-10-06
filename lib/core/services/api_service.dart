@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:recibos_flutter/core/config/app_config.dart';
 import 'package:recibos_flutter/core/services/errors.dart';
 import 'package:recibos_flutter/core/services/auth_bridge.dart';
+import 'package:recibos_flutter/core/models/budget.dart';
 
 /// Clase responsable de toda la comunicación directa con la API del backend.
 class ApiService {
@@ -95,6 +96,9 @@ class ApiService {
   void setTokens({String? access, String? refresh}) { _accessToken = access; _refreshToken = refresh; }
   void setLocaleCode(String? code) { if (code != null && code.isNotEmpty) _localeCode = code; }
 
+  // Expose Dio instance for services that need direct access
+  Dio get dio => _dio;
+
   Map<String, String> _headers({Map<String, String>? extra}) {
     // Conservado por compatibilidad en _refresh anterior; el resto usa interceptores.
     final headers = <String, String>{
@@ -141,28 +145,58 @@ class ApiService {
         final tokens = data['data']?['tokens'];
         final newAccess = tokens?['accessToken'] as String?;
         final newRefresh = tokens?['refreshToken'] as String?;
+
+        if (kDebugMode) {
+          print('[ApiService] Refresh successful - Access: ${newAccess?.substring(0, 10)}..., Refresh: ${newRefresh?.substring(0, 10)}...');
+        }
+
         if (newAccess != null && newAccess.isNotEmpty) {
+          // IMPORTANTE: Persistir tokens ANTES de actualizar estado local
+          // para evitar race conditions
+          final onUpd = AuthBridge.onTokensUpdated;
+          if (onUpd != null) {
+            await onUpd(newAccess, newRefresh);
+            if (kDebugMode) {
+              print('[ApiService] Tokens persisted to secure storage');
+            }
+          }
+
+          // Ahora actualizar estado local
           setAccessToken(newAccess);
           if (newRefresh != null && newRefresh.isNotEmpty) {
             setRefreshToken(newRefresh);
           }
-          final onUpd = AuthBridge.onTokensUpdated;
-          if (onUpd != null) {
-            await onUpd(newAccess, newRefresh);
-          }
+
           _consecutiveRefreshFailures = 0;
           _refreshCooldownUntil = null;
+
+          if (kDebugMode) {
+            print('[ApiService] Refresh complete - failures reset');
+          }
           return true;
+        } else {
+          if (kDebugMode) {
+            print('[ApiService] Refresh response missing tokens');
+          }
         }
       }
       // Non-200 or missing tokens: set cooldown/backoff
       _consecutiveRefreshFailures += 1;
       Duration backoff;
+
+      if (kDebugMode) {
+        print('[ApiService] Refresh failed - Status: ${r.statusCode}, Failures: $_consecutiveRefreshFailures');
+        print('[ApiService] Response: ${r.data}');
+      }
+
       if (r.statusCode == 429) {
         backoff = Duration(seconds: 30 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 8));
       } else if (r.statusCode == 401 || r.statusCode == 400) {
         // Refresh token definitivamente inválido: backoff corto antes de logout
         backoff = const Duration(seconds: 2);
+        if (kDebugMode) {
+          print('[ApiService] Refresh token invalid - will trigger logout');
+        }
       } else {
         // Error 5xx o de red: backoff exponencial para reintentos
         backoff = Duration(seconds: 10 * (1 << (_consecutiveRefreshFailures - 1)).clamp(1, 6));
@@ -235,6 +269,9 @@ class ApiService {
     final response = await _request(() => _dio.get('/receipts/$id'));
     if (response.statusCode == 200) {
       return response.data['data'] as Map<String, dynamic>;
+    }
+    if (response.statusCode == 404) {
+      throw NotFoundException('Receipt not found');
     }
     throw Exception('Error al obtener recibo: ${response.statusCode}');
   }
@@ -364,6 +401,19 @@ class ApiService {
     }
     if (resp.statusCode == 401) throw UnauthorizedException('Sesión expirada');
     throw Exception('Error en la subida de imagen: ${resp.statusCode}');
+  }
+
+  /// Upload profile photo to dedicated endpoint
+  Future<Map<String, dynamic>> uploadProfileImage(File imageFile) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(imageFile.path),
+    });
+    final resp = await _request(() => _dio.post('/upload/profile', data: form));
+    if (resp.statusCode == 200) {
+      return resp.data as Map<String, dynamic>;
+    }
+    if (resp.statusCode == 401) throw UnauthorizedException('Sesión expirada');
+    throw Exception('Error en la subida de foto de perfil: ${resp.statusCode}');
   }
 
   /// Update user profile photo
@@ -518,5 +568,288 @@ class ApiService {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception('Error product frequency: ${response.statusCode}');
+  }
+
+  // ============================================================================
+  // BUDGETS ENDPOINTS
+  // ============================================================================
+
+  /// Get all budgets for the authenticated user
+  Future<List<dynamic>> getBudgets({String? category, bool? isActive, String? period}) async {
+    final qp = <String, String>{
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (isActive != null) 'isActive': isActive.toString(),
+      if (period != null && period.isNotEmpty) 'period': period,
+    };
+    final response = await _request(() => _dio.get('/budgets', queryParameters: qp.isEmpty ? null : qp));
+    if (response.statusCode == 200) {
+      // Backend returns: { data: { budgets: [...], count: 123 } }
+      final data = response.data['data']['budgets'] as List<dynamic>?;
+      return data ?? [];
+    }
+    throw Exception('Error getting budgets: ${response.statusCode}');
+  }
+
+  /// Get specific budget by ID
+  Future<Budget> getBudget(String id) async {
+    final response = await _request(() => _dio.get('/budgets/$id'));
+    if (response.statusCode == 200) {
+      final data = response.data['data'] as Map<String, dynamic>;
+      return Budget.fromJson(data);
+    }
+    throw Exception('Error getting budget: ${response.statusCode}');
+  }
+
+  /// Create a new budget
+  Future<Budget> createBudget(Map<String, dynamic> budgetData) async {
+    final response = await _request(() => _dio.post('/budgets', data: budgetData));
+    if (response.statusCode == 201) {
+      final data = response.data['data'] as Map<String, dynamic>;
+      return Budget.fromJson(data);
+    }
+    throw Exception('Error creating budget: ${response.statusCode}');
+  }
+
+  /// Update existing budget
+  Future<Budget> updateBudget(String id, Map<String, dynamic> budgetData) async {
+    final response = await _request(() => _dio.put('/budgets/$id', data: budgetData));
+    if (response.statusCode == 200) {
+      final data = response.data['data'] as Map<String, dynamic>;
+      return Budget.fromJson(data);
+    }
+    throw Exception('Error updating budget: ${response.statusCode}');
+  }
+
+  /// Delete budget
+  Future<void> deleteBudget(String id) async {
+    final response = await _request(() => _dio.delete('/budgets/$id'));
+    if (response.statusCode != 200) {
+      throw Exception('Error deleting budget: ${response.statusCode}');
+    }
+  }
+
+  /// Duplicate budget
+  Future<Map<String, dynamic>> duplicateBudget({
+    required String id,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final payload = {
+      'startDate': startDate.toIso8601String(),
+      'endDate': endDate.toIso8601String(),
+    };
+    final response = await _request(() => _dio.post('/budgets/$id/duplicate', data: payload));
+    if (response.statusCode == 201) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error duplicating budget: ${response.statusCode}');
+  }
+
+  /// Get budget progress
+  Future<Map<String, dynamic>> getBudgetProgress(String id) async {
+    final response = await _request(() => _dio.get('/budgets/$id/progress'));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting budget progress: ${response.statusCode}');
+  }
+
+  /// Get budgets summary
+  Future<Map<String, dynamic>> getBudgetsSummary() async {
+    final response = await _request(() => _dio.get('/budgets/summary'));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting budgets summary: ${response.statusCode}');
+  }
+
+  /// Get budget insights
+  Future<Map<String, dynamic>> getBudgetInsights(String id) async {
+    final response = await _request(() => _dio.get('/budgets/$id/insights'));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting budget insights: ${response.statusCode}');
+  }
+
+  /// Get budget predictions
+  Future<Map<String, dynamic>> getBudgetPredictions(String id) async {
+    final response = await _request(() => _dio.get('/budgets/$id/predictions'));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting budget predictions: ${response.statusCode}');
+  }
+
+  /// Get budget alerts
+  Future<Map<String, dynamic>> getBudgetAlerts({
+    String? budgetId,
+    bool? unreadOnly,
+    int? limit,
+  }) async {
+    final qp = <String, String>{
+      if (budgetId != null) 'budgetId': budgetId,
+      if (unreadOnly != null) 'unreadOnly': unreadOnly.toString(),
+      if (limit != null) 'limit': limit.toString(),
+    };
+    final response = await _request(() => _dio.get('/budgets/alerts', queryParameters: qp.isEmpty ? null : qp));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting budget alerts: ${response.statusCode}');
+  }
+
+  /// Mark alert as read
+  Future<void> markAlertAsRead(String alertId) async {
+    final response = await _request(() => _dio.put('/budgets/alerts/$alertId/read'));
+    if (response.statusCode != 200) {
+      throw Exception('Error marking alert as read: ${response.statusCode}');
+    }
+  }
+
+  /// Mark all alerts as read
+  Future<void> markAllAlertsAsRead() async {
+    final response = await _request(() => _dio.put('/budgets/alerts/read-all'));
+    if (response.statusCode != 200) {
+      throw Exception('Error marking all alerts as read: ${response.statusCode}');
+    }
+  }
+
+  /// Get alert statistics
+  Future<Map<String, dynamic>> getAlertStats() async {
+    final response = await _request(() => _dio.get('/budgets/alerts/stats'));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting alert stats: ${response.statusCode}');
+  }
+
+  // ============================================================================
+  // NOTIFICATIONS ENDPOINTS
+  // ============================================================================
+
+  /// Get notification preferences
+  Future<Map<String, dynamic>> getNotificationPreferences() async {
+    final response = await _request(() => _dio.get('/notifications/preferences'));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting notification preferences: ${response.statusCode}');
+  }
+
+  /// Update notification preferences
+  Future<Map<String, dynamic>> updateNotificationPreferences({
+    bool? budgetAlerts,
+    bool? receiptProcessing,
+    bool? weeklyDigest,
+    bool? monthlyDigest,
+    bool? priceAlerts,
+    bool? productRecommendations,
+  }) async {
+    final payload = <String, dynamic>{
+      if (budgetAlerts != null) 'budgetAlerts': budgetAlerts,
+      if (receiptProcessing != null) 'receiptProcessing': receiptProcessing,
+      if (weeklyDigest != null) 'weeklyDigest': weeklyDigest,
+      if (monthlyDigest != null) 'monthlyDigest': monthlyDigest,
+      if (priceAlerts != null) 'priceAlerts': priceAlerts,
+      if (productRecommendations != null) 'productRecommendations': productRecommendations,
+    };
+    final response = await _request(() => _dio.put('/notifications/preferences', data: payload));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error updating notification preferences: ${response.statusCode}');
+  }
+
+  /// Register FCM token for push notifications
+  Future<void> registerFCMToken({
+    required String fcmToken,
+    Map<String, dynamic>? deviceInfo,
+  }) async {
+    final payload = <String, dynamic>{
+      'fcmToken': fcmToken,
+      if (deviceInfo != null) 'deviceInfo': deviceInfo,
+    };
+    final response = await _request(() => _dio.post('/notifications/fcm-token', data: payload));
+    if (response.statusCode != 200) {
+      throw Exception('Error registering FCM token: ${response.statusCode}');
+    }
+  }
+
+  /// Remove FCM token (disable push notifications)
+  Future<void> removeFCMToken() async {
+    final response = await _request(() => _dio.delete('/notifications/fcm-token'));
+    if (response.statusCode != 200) {
+      throw Exception('Error removing FCM token: ${response.statusCode}');
+    }
+  }
+
+  /// Update notification channels
+  Future<void> updateNotificationChannels({
+    required Map<String, bool> channels,
+  }) async {
+    final payload = {'channels': channels};
+    final response = await _request(() => _dio.put('/notifications/channels', data: payload));
+    if (response.statusCode != 200) {
+      throw Exception('Error updating notification channels: ${response.statusCode}');
+    }
+  }
+
+  /// Set quiet hours (do not disturb)
+  Future<void> setQuietHours({
+    required bool enabled,
+    int? start,
+    int? end,
+  }) async {
+    final payload = <String, dynamic>{
+      'enabled': enabled,
+      if (start != null) 'start': start,
+      if (end != null) 'end': end,
+    };
+    final response = await _request(() => _dio.put('/notifications/quiet-hours', data: payload));
+    if (response.statusCode != 200) {
+      throw Exception('Error setting quiet hours: ${response.statusCode}');
+    }
+  }
+
+  /// Update digest settings
+  Future<void> updateDigestSettings({
+    String? frequency,
+    int? day,
+    int? hour,
+    bool? weeklyEnabled,
+    bool? monthlyEnabled,
+  }) async {
+    final payload = <String, dynamic>{
+      if (frequency != null) 'frequency': frequency,
+      if (day != null) 'day': day,
+      if (hour != null) 'hour': hour,
+      if (weeklyEnabled != null) 'weeklyEnabled': weeklyEnabled,
+      if (monthlyEnabled != null) 'monthlyEnabled': monthlyEnabled,
+    };
+    final response = await _request(() => _dio.put('/notifications/digest', data: payload));
+    if (response.statusCode != 200) {
+      throw Exception('Error updating digest settings: ${response.statusCode}');
+    }
+  }
+
+  /// Send test notification
+  Future<void> sendTestNotification({String? channel}) async {
+    final payload = <String, dynamic>{
+      if (channel != null) 'channel': channel,
+    };
+    final response = await _request(() => _dio.post('/notifications/test', data: payload));
+    if (response.statusCode != 200) {
+      throw Exception('Error sending test notification: ${response.statusCode}');
+    }
+  }
+
+  /// Get FCM service status
+  Future<Map<String, dynamic>> getFCMStatus() async {
+    final response = await _request(() => _dio.get('/notifications/fcm/status'));
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting FCM status: ${response.statusCode}');
   }
 }

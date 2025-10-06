@@ -18,6 +18,12 @@ import 'package:recibos_flutter/features/analytics/product_detail/product_detail
 import 'package:recibos_flutter/core/locale/onboarding_controller.dart';
 import 'package:recibos_flutter/core/di/service_locator.dart';
 import 'package:recibos_flutter/features/onboarding/onboarding_screen.dart';
+import 'package:recibos_flutter/features/search/search_screen.dart';
+import 'package:recibos_flutter/features/budgets/list/screens/budget_list_screen.dart';
+import 'package:recibos_flutter/features/budgets/detail/screens/budget_detail_screen.dart';
+import 'package:recibos_flutter/features/budgets/form/screens/budget_form_screen.dart';
+import 'package:recibos_flutter/features/budgets/insights/screens/budget_insights_screen.dart';
+import 'package:recibos_flutter/features/notifications/screens/notifications_center_screen.dart';
 
 GoRouter createRouter(AuthService auth) {
   final onboarding = sl<OnboardingController>();
@@ -85,9 +91,14 @@ GoRouter createRouter(AuthService auth) {
           builder: (context, state) => const AnalyticsOverviewScreen(),
         ),
         GoRoute(
+          path: '/budgets',
+          name: 'budgets',
+          builder: (context, state) => const BudgetListScreen(),
+        ),
+        GoRoute(
           path: '/notifications',
           name: 'notifications',
-          builder: (context, state) => const _NotificationsScreen(),
+          builder: (context, state) => const NotificationsCenterScreen(),
         ),
         GoRoute(
           path: '/profile',
@@ -95,6 +106,29 @@ GoRouter createRouter(AuthService auth) {
           builder: (context, state) => const ProfileScreen(),
         ),
       ],
+    ),
+    GoRoute(
+      path: '/search',
+      name: 'search',
+      pageBuilder: (context, state) {
+        final initialQuery = state.extra as String?;
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: SearchScreen(initialQuery: initialQuery),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(0.0, 1.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOutCubic;
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var offsetAnimation = animation.drive(tween);
+
+            return SlideTransition(
+              position: offsetAnimation,
+              child: child,
+            );
+          },
+        );
+      },
     ),
     GoRoute(
       path: '/analytics/spending',
@@ -146,17 +180,36 @@ GoRouter createRouter(AuthService auth) {
       name: 'edit_receipt',
       builder: (context, state) => EditReceiptScreen(receipt: state.extra),
     ),
+    // Budget routes (full-screen)
+    GoRoute(
+      path: '/budgets/create',
+      name: 'budget_create',
+      builder: (context, state) => const BudgetFormScreen(),
+    ),
+    GoRoute(
+      path: '/budgets/:id',
+      name: 'budget_detail',
+      builder: (context, state) {
+        final budgetId = state.pathParameters['id']!;
+        return BudgetDetailScreen(budgetId: budgetId);
+      },
+    ),
+    GoRoute(
+      path: '/budgets/:id/edit',
+      name: 'budget_edit',
+      builder: (context, state) {
+        final budgetId = state.pathParameters['id']!;
+        return BudgetFormScreen(budgetId: budgetId);
+      },
+    ),
+    GoRoute(
+      path: '/budgets/:id/insights',
+      name: 'budget_insights',
+      builder: (context, state) {
+        final budgetId = state.pathParameters['id']!;
+        return BudgetInsightsScreen(budgetId: budgetId);
+      },
+    ),
   ],
 );
-}
-
-class _NotificationsScreen extends StatelessWidget {
-  const _NotificationsScreen();
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notificaciones')),
-      body: const Center(child: Text('Próximamente: alertas y notificaciones')), 
-    );
-  }
 }

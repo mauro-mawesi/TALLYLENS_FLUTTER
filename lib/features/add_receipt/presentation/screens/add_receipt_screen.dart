@@ -7,8 +7,8 @@ import 'package:recibos_flutter/core/di/service_locator.dart';
 import 'package:recibos_flutter/core/services/image_service.dart';
 import 'package:recibos_flutter/core/widgets/glass_card.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:recibos_flutter/features/add_receipt/presentation/screens/smart_capture_screen.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart' as ml;
+import 'package:recibos_flutter/core/theme/app_colors.dart';
 
 class AddReceiptScreen extends StatefulWidget {
   const AddReceiptScreen({super.key});
@@ -29,41 +29,47 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     if (_isLoading) return;
-    final image = source == ImageSource.gallery
-        ? await _imageService.pickFromGallery()
-        : await _imageService.pickFromCamera();
-    if (image != null) {
-      setState(() {
-        _selectedImage = image;
-        _processedByMLKit = false;
-        _source = source == ImageSource.gallery ? 'gallery' : 'camera';
-      });
+
+    try {
+      final image = source == ImageSource.gallery
+          ? await _imageService.pickFromGallery()
+          : await _imageService.pickFromCamera();
+
+      if (image != null && mounted) {
+        setState(() {
+          _selectedImage = image;
+          _processedByMLKit = false;
+          _source = source == ImageSource.gallery ? 'gallery' : 'camera';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
     }
   }
 
-  Future<void> _handleCameraTap() async {
+  Future<void> _handleScanTap() async {
     if (_isLoading) return;
     HapticFeedback.mediumImpact();
-    // Intentar primero con ML Kit (document scanner)
+    // Usar ML Kit document scanner
     File? file = await _scanWithMlKit();
     if (file != null && mounted) {
       setState(() {
         _selectedImage = file;
-        _processedByMLKit = true; // procesada por ML Kit
+        _processedByMLKit = true;
         _source = 'camera';
       });
-      return;
-    }
-    // Fallback a captura inteligente propia (sin ML Kit)
-    final f = await Navigator.of(context).push<File?>(
-      MaterialPageRoute(builder: (_) => const SmartCaptureScreen()),
-    );
-    if (f != null && mounted) {
-      setState(() {
-        _selectedImage = f;
-        _processedByMLKit = false;
-        _source = 'camera';
-      });
+    } else if (mounted) {
+      // Mostrar mensaje si falla o se cancela
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.scanCancelled),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -124,7 +130,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.errorPrefix(e.toString())),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     } finally {
@@ -139,13 +145,13 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
     final t = AppLocalizations.of(context)!;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFF0A0A1F),
+      backgroundColor: FlowColors.background(context),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
         title: Text(
           t.newReceiptTitle,
-          style: const TextStyle(color: Color(0xFFEBEBF5), fontWeight: FontWeight.w600),
+          style: TextStyle(color: FlowColors.text(context), fontWeight: FontWeight.w600),
         ),
       ),
       body: Stack(
@@ -153,9 +159,9 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
           // Fondo gradiente
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF0A0A1F), Color(0xFF181842)],
+                  colors: FlowColors.backgroundGradient(context),
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -180,7 +186,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                           decoration: BoxDecoration(
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF8A2BE2).withOpacity(0.22),
+                                color: FlowColors.primary.withOpacity(0.22),
                                 blurRadius: 18,
                                 spreadRadius: 0.5,
                                 offset: const Offset(0, 6),
@@ -190,7 +196,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                           child: GlassCard(
                             borderRadius: 24,
                             padding: const EdgeInsets.all(16),
-                            color: Colors.white.withOpacity(0.22),
+                            color: FlowColors.glassTint(context).withOpacity(0.4),
                             child: SizedBox(
                               height: previewH,
                               width: double.infinity,
@@ -253,7 +259,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                   GlassCard(
                     borderRadius: 20,
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                    color: Colors.white.withOpacity(0.12),
+                    color: FlowColors.glassTint(context).withOpacity(0.2),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -262,11 +268,13 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
                               _NeonCircleButton(
-                                icon: Icons.camera_alt_rounded,
-                                onTap: _handleCameraTap,
+                                icon: Icons.document_scanner_rounded,
+                                label: t.scan,
+                                onTap: _handleScanTap,
                               ),
                               _CircleOutlineButton(
                                 icon: Icons.image_outlined,
+                                label: t.gallery,
                                 onTap: () async {
                                   HapticFeedback.selectionClick();
                                   await _pickImage(ImageSource.gallery);
@@ -275,29 +283,15 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                             ],
                           ),
                         ] else ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              TextButton.icon(
-                                onPressed: () async {
-                                  HapticFeedback.selectionClick();
-                                  await _pickImage(ImageSource.gallery);
-                                },
-                                icon: const Icon(Icons.image_outlined),
-                                label: Text(AppLocalizations.of(context)!.gallery),
-                              ),
-                              TextButton.icon(
-                                onPressed: () async {
-                                  HapticFeedback.lightImpact();
-                                  final file = await Navigator.of(context).push<File?>(
-                                    MaterialPageRoute(builder: (_) => const SmartCaptureScreen()),
-                                  );
-                                  if (file != null && mounted) setState(() => _selectedImage = file);
-                                },
-                                icon: const Icon(Icons.camera_alt_outlined),
-                                label: Text(AppLocalizations.of(context)!.camera),
-                              ),
-                            ],
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() => _selectedImage = null);
+                            },
+                            icon: const Icon(Icons.refresh, size: 20),
+                            label: Text(t.changeImage),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
                           ),
                           const SizedBox(height: 12),
                           _NeonCTAButton(
@@ -343,8 +337,9 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
 
 class _NeonCircleButton extends StatefulWidget {
   final IconData icon;
+  final String label;
   final VoidCallback onTap;
-  const _NeonCircleButton({required this.icon, required this.onTap});
+  const _NeonCircleButton({required this.icon, required this.label, required this.onTap});
 
   @override
   State<_NeonCircleButton> createState() => _NeonCircleButtonState();
@@ -371,36 +366,52 @@ class _NeonCircleButtonState extends State<_NeonCircleButton> with SingleTickerP
       onTapCancel: () => _c.reverse(),
       onTapUp: (_) => _c.reverse(),
       onTap: widget.onTap,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, child) {
-          final t = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic).value;
-          final scale = 1 - (0.04 * t);
-          return Transform.scale(
-            scale: scale,
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF8A2BE2), Color(0xFF00E3FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _c,
+            builder: (context, child) {
+              final t = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic).value;
+              final scale = 1 - (0.04 * t);
+              return Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [FlowColors.primary, FlowColors.accentCyan],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: FlowColors.primary.withOpacity(0.45), blurRadius: 22, spreadRadius: 3),
+                      ],
+                    ),
+                    child: Center(child: Icon(widget.icon, color: Colors.white, size: 28)),
+                  ),
                 ),
-              ),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: const Color(0xFF8A2BE2).withOpacity(0.45), blurRadius: 22, spreadRadius: 3),
-                  ],
-                ),
-                child: const Center(child: Icon(Icons.camera_alt, color: Colors.white, size: 28)),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Builder(
+            builder: (context) => Text(
+              widget.label,
+              style: TextStyle(
+                color: FlowColors.text(context),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -422,7 +433,7 @@ class _NeonCTAButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(colors: [Color(0xFF8A2BE2), Color(0xFF00E3FF)]),
+            gradient: LinearGradient(colors: [FlowColors.primary, FlowColors.accentCyan]),
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
           child: Container(
@@ -430,14 +441,14 @@ class _NeonCTAButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
               boxShadow: [
-                BoxShadow(color: const Color(0xFF8A2BE2).withOpacity(0.45), blurRadius: 22, spreadRadius: 3),
+                BoxShadow(color: FlowColors.primary.withOpacity(0.45), blurRadius: 22, spreadRadius: 3),
               ],
               borderRadius: BorderRadius.circular(16),
             ),
             child: Center(
               child: loading
                   ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text(label, style: const TextStyle(color: Color(0xFFEBEBF5), fontWeight: FontWeight.w700)),
+                  : Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ),
         ),
@@ -448,23 +459,37 @@ class _NeonCTAButton extends StatelessWidget {
 
 class _CircleOutlineButton extends StatelessWidget {
   final IconData icon;
+  final String label;
   final VoidCallback onTap;
-  const _CircleOutlineButton({required this.icon, required this.onTap});
+  const _CircleOutlineButton({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
     return InkWell(
       onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: primary.withOpacity(0.8), width: 2),
-        ),
-        child: Icon(icon, color: primary),
+      borderRadius: BorderRadius.circular(50),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: FlowColors.primary.withOpacity(0.6), width: 2),
+            ),
+            child: Icon(icon, color: FlowColors.primary, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: FlowColors.text(context),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -476,6 +501,7 @@ class _SmallGlassIconButton extends StatelessWidget {
   const _SmallGlassIconButton({required this.icon, required this.onTap});
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       customBorder: const CircleBorder(),
@@ -484,12 +510,15 @@ class _SmallGlassIconButton extends StatelessWidget {
         height: 36,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Colors.white.withOpacity(0.18),
+          color: FlowColors.glassTint(context).withOpacity(0.3),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8),
+            BoxShadow(
+              color: (isDark ? Colors.black : Colors.grey).withOpacity(0.2),
+              blurRadius: 8,
+            ),
           ],
         ),
-        child: Icon(icon, color: Colors.white, size: 18),
+        child: Icon(icon, color: FlowColors.text(context), size: 18),
       ),
     );
   }

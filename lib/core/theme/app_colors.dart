@@ -13,7 +13,7 @@ class FlowColors {
   static const Color textSecondaryDark = Color(0xFF9E9EAA);
 
   // Light theme constants
-  static const Color backgroundLight = Color(0xFFF7F8FA);
+  static const Color backgroundLight = Color(0xFFF0F1F3);
   static const Color secondaryLight = Color(0xFF00C853); // Darker green for contrast
   static const Color textLight = Color(0xFF1A1A2E);
   static const Color textSecondaryLight = Color(0xFF64748B);
@@ -21,14 +21,14 @@ class FlowColors {
   // Theme-specific colors
   static Color background(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return isDark ? const Color(0xFF0A0A1F) : const Color(0xFFF7F8FA);
+    return isDark ? const Color(0xFF0A0A1F) : const Color(0xFFF0F1F3);
   }
 
   static List<Color> backgroundGradient(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return isDark
       ? [const Color(0xFF0A0A1F), const Color(0xFF0B0B22)]
-      : [const Color(0xFFF7F8FA), const Color(0xFFE8E9EC)];
+      : [const Color(0xFFF0F1F3), const Color(0xFFE3E4E8)];
   }
 
   static Color secondary(BuildContext context) {
@@ -48,7 +48,7 @@ class FlowColors {
 
   static Color glassTint(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Colors.white.withOpacity(isDark ? 0.15 : 0.08);
+    return Colors.white.withOpacity(isDark ? 0.15 : 0.85);
   }
 
   static Color iconColor(BuildContext context) {
@@ -57,6 +57,8 @@ class FlowColors {
 
   static Color divider(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Colors.white.withOpacity(isDark ? 0.1 : 0.15);
+    return isDark
+        ? Colors.white.withOpacity(0.1)
+        : Colors.black.withOpacity(0.08);
   }
 }

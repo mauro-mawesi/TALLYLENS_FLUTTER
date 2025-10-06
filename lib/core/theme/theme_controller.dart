@@ -5,7 +5,6 @@ class ThemeController extends ChangeNotifier {
   ThemeMode _mode = ThemeMode.dark;
 
   ThemeMode get mode => _mode;
-
   bool get isDark => _mode == ThemeMode.dark;
 
   Future<void> load() async {
@@ -25,15 +24,15 @@ class ThemeController extends ChangeNotifier {
   }
 
   Future<void> setMode(ThemeMode mode) async {
+    if (_mode == mode) return;
     _mode = mode;
     await _persist();
     notifyListeners();
   }
 
   Future<void> toggle() async {
-    _mode = _mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    await _persist();
-    notifyListeners();
+    final newMode = _mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    await setMode(newMode);
   }
 }
 

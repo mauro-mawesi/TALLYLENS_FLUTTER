@@ -11,6 +11,8 @@ import 'package:recibos_flutter/core/widgets/glass_card.dart';
 import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:recibos_flutter/core/services/privacy_controller.dart';
+import 'package:animated_theme_switcher/animated_theme_switcher.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'widgets/profile_top_hero.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -21,23 +23,24 @@ class ProfileScreen extends StatelessWidget {
     final auth = sl<AuthService>();
     final t = AppLocalizations.of(context)!;
     final user = auth.profile;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, title: const SizedBox.shrink()),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: FlowColors.backgroundGradient(context),
+    return ThemeSwitchingArea(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: FlowColors.backgroundGradient(context),
+            ),
           ),
-        ),
-        child: AnimatedBuilder(
-          animation: themeController,
-          builder: (context, _) {
-            final bottomInset = MediaQuery.of(context).padding.bottom;
-            return ListView(
-            padding: EdgeInsets.fromLTRB(16, 10, 16, bottomInset + 96),
+          child: AnimatedBuilder(
+            animation: themeController,
+            builder: (context, _) {
+              final topInset = MediaQuery.of(context).padding.top;
+              final bottomInset = MediaQuery.of(context).padding.bottom;
+              return ListView(
+            padding: EdgeInsets.fromLTRB(16, topInset + 10, 16, bottomInset + 96),
             children: [
               ProfileTopHero(email: user?.email ?? ''),
               const SizedBox(height: 16),
@@ -46,17 +49,7 @@ class ProfileScreen extends StatelessWidget {
                 borderRadius: 20,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 color: FlowColors.glassTint(context),
-                child: SwitchListTile(
-                  title: Text(
-                    t.darkMode,
-                    style: TextStyle(color: FlowColors.text(context)),
-                  ),
-                  value: themeController.isDark,
-                  activeColor: FlowColors.primary,
-                  onChanged: (v) async {
-                    await themeController.setMode(v ? ThemeMode.dark : ThemeMode.light);
-                  },
-                ),
+                child: _ThemeSwitchTile(),
               ),
               const SizedBox(height: 24),
               // Language Section
@@ -118,10 +111,13 @@ class ProfileScreen extends StatelessWidget {
                     Divider(height: 1, indent: 16, endIndent: 16, thickness: 0.8, color: FlowColors.divider(context)),
                     SwitchListTile(
                       title: Text(
-                        'Blur en app switcher',
+                        t.blurOnAppSwitcher,
                         style: TextStyle(color: FlowColors.text(context)),
                       ),
-                      subtitle: Text('Oculta contenido cuando la app pasa a segundo plano'),
+                      subtitle: Text(
+                        t.blurOnAppSwitcherSubtitle,
+                        style: TextStyle(color: FlowColors.textSecondary(context)),
+                      ),
                       value: sl<PrivacyController>().blurOnBackground,
                       activeColor: FlowColors.primary,
                       onChanged: (v) async {
@@ -203,8 +199,9 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ],
-          );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -269,6 +266,84 @@ class _GracePicker extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ThemeSwitchTile extends StatelessWidget {
+  const _ThemeSwitchTile();
+
+  ThemeData _buildLightTheme() {
+    final lightTextTheme = GoogleFonts.poppinsTextTheme(ThemeData.light().textTheme).apply(
+      bodyColor: Colors.black87,
+      displayColor: Colors.black87,
+    );
+    final lightCS = const ColorScheme.light(
+      primary: FlowColors.primary,
+      secondary: FlowColors.secondaryLight,
+      surface: Color(0xFFFFFFFF),
+      background: Color(0xFFF7F8FA),
+    );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: lightCS,
+      scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+      textTheme: lightTextTheme,
+    );
+  }
+
+  ThemeData _buildDarkTheme() {
+    final darkTextTheme = GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).apply(
+      bodyColor: FlowColors.textDark,
+      displayColor: FlowColors.textDark,
+    );
+    final darkCS = const ColorScheme.dark(
+      primary: FlowColors.primary,
+      secondary: FlowColors.secondaryDark,
+      surface: Color(0xFF121A2A),
+      background: FlowColors.backgroundDark,
+    );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: darkCS,
+      scaffoldBackgroundColor: FlowColors.backgroundDark,
+      textTheme: darkTextTheme,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    return ThemeSwitcher.switcher(
+      clipper: const ThemeSwitcherCircleClipper(),
+      builder: (context, switcher) {
+        return SwitchListTile(
+          title: Text(
+            t.darkMode,
+            style: TextStyle(color: FlowColors.text(context)),
+          ),
+          value: themeController.isDark,
+          activeColor: FlowColors.primary,
+          onChanged: (v) async {
+            final newTheme = v ? _buildDarkTheme() : _buildLightTheme();
+            final newMode = v ? ThemeMode.dark : ThemeMode.light;
+
+            // Obtener la posición del switch para centrar la animación
+            final RenderBox? box = context.findRenderObject() as RenderBox?;
+            final Offset? position = box != null
+                ? Offset(box.size.width - 50, box.size.height / 2)
+                : null;
+
+            switcher.changeTheme(
+              theme: newTheme,
+              offset: position,
+            );
+
+            await themeController.setMode(newMode);
+          },
+        );
+      },
     );
   }
 }

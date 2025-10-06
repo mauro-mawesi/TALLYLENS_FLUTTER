@@ -70,20 +70,19 @@ class ProfilePhotoService {
       // First compress the image
       final compressed = await compressImage(imageFile);
 
-      // Upload using existing upload endpoint
-      final response = await _apiService.uploadImageWithResponse(compressed);
+      // Upload using dedicated profile photo endpoint
+      final response = await _apiService.uploadProfileImage(compressed);
 
-      // Try different possible keys for image URL
-      final imageUrl = response['imageUrl'] ??
-                      response['image_url'] ??
-                      response['data']?['imageUrl'] ??
-                      response['data']?['image_url'];
+      // IMPORTANT: Store the relative_path in database, not the signed URL
+      // The backend will regenerate signed URLs on each request
+      final relativePath = response['relative_path'] ??
+                          response['relativePath'];
 
-      if (imageUrl == null) {
-        throw Exception('No imageUrl in response');
+      if (relativePath == null) {
+        throw Exception('No relative_path in response');
       }
 
-      return imageUrl as String;
+      return relativePath as String;
     } catch (e) {
       throw Exception('Failed to upload profile photo: $e');
     }
