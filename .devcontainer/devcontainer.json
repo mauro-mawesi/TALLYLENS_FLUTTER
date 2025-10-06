@@ -1,5 +1,5 @@
 {
-    "name": "flutter-receipts",
+    "name": "tallylens-flutter",
     "dockerFile": "Dockerfile",
     "forwardPorts": [
         3000
@@ -12,5 +12,8 @@
             ]
         }
     },
-    "remoteUser": "root"
+    "remoteUser": "root",
+    "runArgs": [
+        "--name", "tallylens-flutter"
+    ],
 }

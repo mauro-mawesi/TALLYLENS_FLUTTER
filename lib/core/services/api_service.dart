@@ -578,7 +578,8 @@ class ApiService {
   Future<List<dynamic>> getBudgets({String? category, bool? isActive, String? period}) async {
     final qp = <String, String>{
       if (category != null && category.isNotEmpty) 'category': category,
-      if (isActive != null) 'isActive': isActive.toString(),
+      // Backend expects 'active' query param, not 'isActive'
+      if (isActive != null) 'active': isActive.toString(),
       if (period != null && period.isNotEmpty) 'period': period,
     };
     final response = await _request(() => _dio.get('/budgets', queryParameters: qp.isEmpty ? null : qp));
@@ -595,7 +596,8 @@ class ApiService {
     final response = await _request(() => _dio.get('/budgets/$id'));
     if (response.statusCode == 200) {
       final data = response.data['data'] as Map<String, dynamic>;
-      return Budget.fromJson(data);
+      final budgetJson = data['budget'] as Map<String, dynamic>;
+      return Budget.fromJson(budgetJson);
     }
     throw Exception('Error getting budget: ${response.statusCode}');
   }
@@ -664,10 +666,11 @@ class ApiService {
   }
 
   /// Get budget insights
-  Future<Map<String, dynamic>> getBudgetInsights(String id) async {
+  Future<List<dynamic>> getBudgetInsights(String id) async {
     final response = await _request(() => _dio.get('/budgets/$id/insights'));
     if (response.statusCode == 200) {
-      return response.data['data'] as Map<String, dynamic>;
+      // Backend returns a list of insight objects in data
+      return response.data['data'] as List<dynamic>;
     }
     throw Exception('Error getting budget insights: ${response.statusCode}');
   }
@@ -709,7 +712,8 @@ class ApiService {
 
   /// Mark all alerts as read
   Future<void> markAllAlertsAsRead() async {
-    final response = await _request(() => _dio.put('/budgets/alerts/read-all'));
+    // Backend route is /budgets/alerts/mark-all-read
+    final response = await _request(() => _dio.put('/budgets/alerts/mark-all-read'));
     if (response.statusCode != 200) {
       throw Exception('Error marking all alerts as read: ${response.statusCode}');
     }

@@ -8,6 +8,8 @@ import 'package:recibos_flutter/features/budgets/detail/bloc/budget_detail_event
 import 'package:recibos_flutter/features/budgets/detail/bloc/budget_detail_state.dart';
 import 'package:recibos_flutter/features/budgets/widgets/widgets.dart';
 import 'package:intl/intl.dart';
+import 'package:recibos_flutter/core/services/budget_service.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 /// Pantalla de detalles de un presupuesto específico.
 /// Muestra progreso detallado, predicciones, insights y alertas.
@@ -33,23 +35,25 @@ class _BudgetDetailView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return BlocBuilder<BudgetDetailBloc, BudgetDetailState>(
       builder: (context, state) {
         if (state is BudgetDetailLoading) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Budget Details')),
-            body: const BudgetLoadingState(message: 'Loading budget details...'),
+            appBar: AppBar(title: Text(l10n?.budgetDetailsTitle ?? 'Budget Details')),
+            body: BudgetLoadingState(message: l10n?.budgetDetailsLoading ?? 'Loading budget details...'),
           );
         }
 
         if (state is BudgetDetailError) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Budget Details')),
+            appBar: AppBar(title: Text(l10n?.budgetDetailsTitle ?? 'Budget Details')),
             body: BudgetErrorState(
               message: state.message,
               onRetry: () {
                 final bloc = context.read<BudgetDetailBloc>();
-                // Need to get budgetId from bloc state
+                // Use Refresh event; bloc tracks current budget id internally
+                bloc.add(const RefreshBudgetDetail());
               },
             ),
           );
@@ -60,7 +64,7 @@ class _BudgetDetailView extends StatelessWidget {
         }
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Budget Details')),
+          appBar: AppBar(title: Text(l10n?.budgetDetailsTitle ?? 'Budget Details')),
           body: const Center(child: Text('Unknown state')),
         );
       },
@@ -79,6 +83,7 @@ class _BudgetDetailContent extends StatelessWidget {
     final progress = state.progress;
     final theme = Theme.of(context);
 
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(budget.name),
@@ -86,37 +91,37 @@ class _BudgetDetailContent extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () => context.push('/budgets/${budget.id}/edit'),
-            tooltip: 'Edit budget',
+            tooltip: l10n?.budgetEditTooltip ?? 'Edit budget',
           ),
           PopupMenuButton(
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'insights',
                 child: Row(
                   children: [
-                    Icon(Icons.lightbulb_outline),
-                    SizedBox(width: 8),
-                    Text('View Insights'),
+                    const Icon(Icons.lightbulb_outline),
+                    const SizedBox(width: 8),
+                    Text(l10n?.budgetMenuViewInsights ?? 'View Insights'),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'duplicate',
                 child: Row(
                   children: [
-                    Icon(Icons.copy),
-                    SizedBox(width: 8),
-                    Text('Duplicate'),
+                    const Icon(Icons.copy),
+                    const SizedBox(width: 8),
+                    Text(l10n?.budgetMenuDuplicate ?? 'Duplicate'),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'delete',
                 child: Row(
                   children: [
-                    Icon(Icons.delete, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Delete', style: TextStyle(color: Colors.red)),
+                    const Icon(Icons.delete, color: Colors.red),
+                    const SizedBox(width: 8),
+                    Text(l10n?.budgetMenuDelete ?? 'Delete', style: const TextStyle(color: Colors.red)),
                   ],
                 ),
               ),
@@ -172,7 +177,7 @@ class _BudgetDetailContent extends StatelessWidget {
           : FloatingActionButton.extended(
               onPressed: () => _toggleBudgetStatus(context, budget),
               icon: const Icon(Icons.play_arrow),
-              label: const Text('Activate'),
+              label: Text(l10n?.budgetActivateCta ?? 'Activate'),
             ),
     );
   }
@@ -192,27 +197,42 @@ class _BudgetDetailContent extends StatelessWidget {
   }
 
   void _showDuplicateDialog(BuildContext context, Budget budget) {
+    final l10n = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Duplicate Budget'),
-        content: const Text(
-          'This will create a copy of this budget with new dates. Continue?',
-        ),
+        title: Text(l10n?.budgetDuplicateTitle ?? 'Duplicate Budget'),
+        content: Text(l10n?.budgetDuplicateMessage ?? 'This will create a copy of this budget with new dates. Continue?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(l10n?.commonCancel ?? 'Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dialogContext);
-              // TODO: Implement duplicate logic
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Duplicate functionality coming soon')),
-              );
+              try {
+                final svc = sl<BudgetService>();
+                final newBudget = await svc.duplicateBudget(
+                  budgetId: budget.id,
+                  startDate: budget.startDate,
+                  endDate: budget.endDate,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n?.budgetDuplicateSuccess ?? 'Budget duplicated successfully')),
+                  );
+                  context.push('/budgets/${newBudget.id}');
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n?.budgetDuplicateError ?? 'Error duplicating budget')),
+                  );
+                }
+              }
             },
-            child: const Text('Duplicate'),
+            child: Text(l10n?.budgetMenuDuplicate ?? 'Duplicate'),
           ),
         ],
       ),
@@ -220,28 +240,42 @@ class _BudgetDetailContent extends StatelessWidget {
   }
 
   void _showDeleteDialog(BuildContext context, Budget budget) {
+    final l10n = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Budget'),
-        content: const Text(
-          'Are you sure you want to delete this budget? This action cannot be undone.',
-        ),
+        title: Text(l10n?.budgetDeleteTitle ?? 'Delete Budget'),
+        content: Text(l10n?.budgetDeleteMessage ?? 'Are you sure you want to delete this budget? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(l10n?.commonCancel ?? 'Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dialogContext);
-              // TODO: Implement delete logic
-              context.pop();
+              try {
+                final svc = sl<BudgetService>();
+                await svc.deleteBudget(budget.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n?.budgetDeleteSuccess ?? 'Budget deleted successfully')),
+                  );
+                  // Exit detail screen after deletion
+                  context.pop();
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n?.budgetDeleteError ?? 'Error deleting budget')),
+                  );
+                }
+              }
             },
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
-            child: const Text('Delete'),
+            child: Text(l10n?.budgetMenuDelete ?? 'Delete'),
           ),
         ],
       ),

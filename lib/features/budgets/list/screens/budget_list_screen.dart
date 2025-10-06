@@ -6,6 +6,7 @@ import 'package:recibos_flutter/features/budgets/list/bloc/budget_list_bloc.dart
 import 'package:recibos_flutter/features/budgets/list/bloc/budget_list_event.dart';
 import 'package:recibos_flutter/features/budgets/list/bloc/budget_list_state.dart';
 import 'package:recibos_flutter/features/budgets/widgets/widgets.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 /// Pantalla principal que muestra la lista de presupuestos del usuario.
 /// Incluye filtros por categoría, período y estado, además de opciones para
@@ -29,29 +30,28 @@ class _BudgetListView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Budgets'),
+        title: Text(l10n?.budgetsTitle ?? 'Budgets'),
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () => _showFilterSheet(context),
-            tooltip: 'Filter budgets',
+            tooltip: l10n?.budgetFilterTooltip ?? 'Filter budgets',
           ),
         ],
       ),
       body: BlocBuilder<BudgetListBloc, BudgetListState>(
         builder: (context, state) {
           if (state is BudgetListLoading) {
-            return const BudgetLoadingState(message: 'Loading your budgets...');
+            return BudgetLoadingState(message: l10n?.budgetListLoading ?? 'Loading your budgets...');
           }
 
           if (state is BudgetListError) {
             return BudgetErrorState(
               message: state.message,
-              onRetry: () {
-                context.read<BudgetListBloc>().add(const FetchBudgets());
-              },
+              onRetry: () => context.read<BudgetListBloc>().add(const FetchBudgets()),
             );
           }
 
@@ -59,15 +59,15 @@ class _BudgetListView extends StatelessWidget {
             if (state.budgets.isEmpty) {
               return BudgetEmptyState(
                 title: state.hasActiveFilters
-                    ? 'No budgets match your filters'
-                    : 'No Budgets Yet',
+                    ? (l10n?.budgetListNoMatchTitle ?? 'No budgets match your filters')
+                    : (l10n?.budgetListNoBudgetsTitle ?? 'No Budgets Yet'),
                 message: state.hasActiveFilters
-                    ? 'Try adjusting your filters to see more budgets'
-                    : 'Create your first budget to start tracking your spending and achieve your financial goals.',
+                    ? (l10n?.budgetListNoMatchMessage ?? 'Try adjusting your filters to see more budgets')
+                    : (l10n?.budgetListNoBudgetsMessage ?? 'Create your first budget to start tracking your spending and achieve your financial goals.'),
                 onActionPressed: state.hasActiveFilters
                     ? () => context.read<BudgetListBloc>().add(const ClearBudgetFilters())
                     : () => context.push('/budgets/create'),
-                actionLabel: state.hasActiveFilters ? 'Clear Filters' : 'Create Budget',
+                actionLabel: state.hasActiveFilters ? (l10n?.clearFilters ?? 'Clear Filters') : (l10n?.budgetFormCreateCta ?? 'Create Budget'),
               );
             }
 
@@ -132,12 +132,13 @@ class _BudgetListView extends StatelessWidget {
           }
         },
         icon: const Icon(Icons.add),
-        label: const Text('New Budget'),
+        label: Text(l10n?.budgetFabNew ?? 'New Budget'),
       ),
     );
   }
 
   void _showFilterSheet(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final bloc = context.read<BudgetListBloc>();
     final state = bloc.state;
 
@@ -179,7 +180,7 @@ class _BudgetListView extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Filter Budgets',
+                                l10n?.filtersTitle ?? 'Filters',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                               TextButton(
@@ -190,7 +191,7 @@ class _BudgetListView extends StatelessWidget {
                                     activeOnly = false;
                                   });
                                 },
-                                child: const Text('Clear All'),
+                                child: Text(l10n?.commonClearAll ?? 'Clear All'),
                               ),
                             ],
                           ),
@@ -198,7 +199,7 @@ class _BudgetListView extends StatelessWidget {
 
                           // Active only toggle
                           SwitchListTile(
-                            title: const Text('Active budgets only'),
+                            title: Text(l10n?.budgetFilterActiveOnly ?? 'Active budgets only'),
                             value: activeOnly,
                             onChanged: (value) {
                               setState(() {
@@ -213,29 +214,31 @@ class _BudgetListView extends StatelessWidget {
 
                           // Category filter
                           Text(
-                            'Category',
+                            l10n?.filterCategory ?? 'Category',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
                             children: [
-                              'All',
-                              'Food & Dining',
-                              'Groceries',
-                              'Transportation',
-                              'Shopping',
-                              'Entertainment',
-                            ].map((category) {
-                              final isSelected = category == 'All'
+                              {'label': l10n?.commonAll ?? 'All', 'value': null},
+                              {'label': l10n?.categoryMarket ?? 'Groceries', 'value': 'grocery'},
+                              {'label': l10n?.categoryFood ?? 'Food', 'value': 'food'},
+                              {'label': l10n?.categoryTransport ?? 'Transport', 'value': 'transport'},
+                              {'label': l10n?.categoryFuel ?? 'Fuel', 'value': 'fuel'},
+                              {'label': l10n?.categoryOther ?? 'Other', 'value': 'others'},
+                            ].map((item) {
+                              final label = item['label'] as String;
+                              final value = item['value'] as String?;
+                              final isSelected = value == null
                                   ? selectedCategory == null
-                                  : selectedCategory == category;
+                                  : selectedCategory == value;
                               return FilterChip(
-                                label: Text(category),
+                                label: Text(label),
                                 selected: isSelected,
                                 onSelected: (_) {
                                   setState(() {
-                                    selectedCategory = category == 'All' ? null : category;
+                                    selectedCategory = value;
                                   });
                                 },
                               );
@@ -248,22 +251,32 @@ class _BudgetListView extends StatelessWidget {
 
                           // Period filter
                           Text(
-                            'Period',
+                            l10n?.filterPeriod ?? 'Period',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
-                            children: ['All', 'weekly', 'monthly', 'yearly'].map((period) {
-                              final isSelected = period == 'All'
+                            children: ['all', 'weekly', 'monthly', 'yearly'].map((period) {
+                              final isSelected = period == 'all'
                                   ? selectedPeriod == null
                                   : selectedPeriod == period;
                               return FilterChip(
-                                label: Text(period == 'All' ? period : period.capitalize()),
+                                label: Text(
+                                  period == 'all'
+                                      ? (l10n?.commonAll ?? 'All')
+                                      : (
+                                          period == 'weekly'
+                                              ? (l10n?.periodWeekly ?? 'Weekly')
+                                              : period == 'monthly'
+                                                  ? (l10n?.periodMonthly ?? 'Monthly')
+                                                  : (l10n?.periodYearly ?? 'Yearly')
+                                        ),
+                                ),
                                 selected: isSelected,
                                 onSelected: (_) {
                                   setState(() {
-                                    selectedPeriod = period == 'All' ? null : period;
+                                    selectedPeriod = period == 'all' ? null : period;
                                   });
                                 },
                               );
@@ -284,7 +297,7 @@ class _BudgetListView extends StatelessWidget {
                                 ));
                                 Navigator.pop(context);
                               },
-                              child: const Text('Apply Filters'),
+                              child: Text(l10n?.applyFilters ?? 'Apply filters'),
                             ),
                           ),
                         ],
@@ -361,6 +374,7 @@ class _BudgetSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -371,7 +385,7 @@ class _BudgetSummaryCard extends StatelessWidget {
             Expanded(
               child: _SummaryItem(
                 icon: Icons.account_balance_wallet,
-                label: 'Total Budgets',
+                label: l10n?.budgetSummaryTotalBudgets ?? 'Total Budgets',
                 value: totalBudgets.toString(),
                 color: colorScheme.primary,
               ),
@@ -380,7 +394,7 @@ class _BudgetSummaryCard extends StatelessWidget {
             Expanded(
               child: _SummaryItem(
                 icon: Icons.trending_up,
-                label: 'Active',
+                label: l10n?.budgetSummaryActive ?? 'Active',
                 value: activeBudgets.toString(),
                 color: Colors.green,
               ),

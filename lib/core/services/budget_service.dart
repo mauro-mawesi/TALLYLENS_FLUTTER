@@ -150,30 +150,28 @@ class BudgetService {
   /// Incluye spending actual, porcentaje, días restantes y proyecciones.
   Future<BudgetProgress> getBudgetProgress(String budgetId) async {
     final response = await _apiService.getBudgetProgress(budgetId);
-    return BudgetProgress.fromJson(response['progress'] as Map<String, dynamic>);
+    return BudgetProgress.fromJson(response as Map<String, dynamic>);
   }
 
   /// Obtiene un resumen de todos los presupuestos activos del usuario.
   /// Agrupa por categoría y muestra totales.
   Future<Map<String, dynamic>> getBudgetsSummary() async {
     final response = await _apiService.getBudgetsSummary();
-    return response['summary'] as Map<String, dynamic>;
+    return response as Map<String, dynamic>;
   }
 
   /// Obtiene insights y recomendaciones basadas en el comportamiento del usuario.
   /// Incluye sugerencias de ahorro, categorías problemáticas, etc.
   Future<List<Map<String, dynamic>>> getBudgetInsights(String budgetId) async {
     final response = await _apiService.getBudgetInsights(budgetId);
-    return (response['insights'] as List<dynamic>)
-        .map((e) => e as Map<String, dynamic>)
-        .toList();
+    return response.map((e) => e as Map<String, dynamic>).toList();
   }
 
   /// Obtiene predicciones sobre el gasto futuro basadas en el comportamiento actual.
   /// Usa ML-style analytics para estimar si se excederá el presupuesto.
   Future<Map<String, dynamic>> getBudgetPredictions(String budgetId) async {
     final response = await _apiService.getBudgetPredictions(budgetId);
-    return response['predictions'] as Map<String, dynamic>;
+    return response as Map<String, dynamic>;
   }
 
   // ============================================================================
@@ -211,7 +209,7 @@ class BudgetService {
   /// Incluye conteos por tipo y estado de lectura.
   Future<Map<String, dynamic>> getAlertStats() async {
     final response = await _apiService.getAlertStats();
-    return response['stats'] as Map<String, dynamic>;
+    return response as Map<String, dynamic>;
   }
 
   // ============================================================================
@@ -246,7 +244,7 @@ class BudgetService {
     );
 
     return NotificationPreference.fromJson(
-      response as Map<String, dynamic>
+      (response['preferences'] as Map<String, dynamic>)
     );
   }
 

@@ -72,48 +72,65 @@ class _AppShellState extends State<AppShell> with SingleTickerProviderStateMixin
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
           child: BottomAppBar(
-            height: 64 + extra,
+            height: 68 + extra,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             color: Theme.of(context).colorScheme.surface.withOpacity(0.85),
             shape: const CircularNotchedRectangle(),
             notchMargin: 8,
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _NavIcon(
-              icon: Icons.home_outlined,
-              activeIcon: Icons.home_outlined,
-              label: l10n?.dashboardTitle ?? 'Home',
-              active: currentIndex == 0,
-              onTap: () => _onTap(context, 0),
+            // Grupo izquierdo (3 iconos)
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _NavIcon(
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_outlined,
+                    label: l10n?.dashboardTitle ?? 'Home',
+                    active: currentIndex == 0,
+                    onTap: () => _onTap(context, 0),
+                  ),
+                  _NavIcon(
+                    icon: Icons.auto_graph_outlined,
+                    activeIcon: Icons.auto_graph_outlined,
+                    label: l10n?.insightsTab ?? 'Insights',
+                    active: currentIndex == 1,
+                    onTap: () => _onTap(context, 1),
+                  ),
+                  _NavIcon(
+                    icon: Icons.analytics_outlined,
+                    activeIcon: Icons.analytics,
+                    label: 'Budgets',
+                    active: currentIndex == 2,
+                    onTap: () => _onTap(context, 2),
+                  ),
+                ],
+              ),
             ),
-            _NavIcon(
-              icon: Icons.auto_graph_outlined,
-              activeIcon: Icons.auto_graph_outlined,
-              label: l10n?.insightsTab ?? 'Insights',
-              active: currentIndex == 1,
-              onTap: () => _onTap(context, 1),
-            ),
-            const SizedBox(width: 48), // espacio para el FAB
-            _NavIcon(
-              icon: Icons.account_balance_wallet_outlined,
-              activeIcon: Icons.account_balance_wallet,
-              label: 'Budgets',
-              active: currentIndex == 2,
-              onTap: () => _onTap(context, 2),
-            ),
-            _NavIcon(
-              icon: Icons.notifications_outlined,
-              activeIcon: Icons.notifications,
-              label: l10n?.notificationsTab ?? 'Alerts',
-              active: currentIndex == 3,
-              onTap: () => _onTap(context, 3),
-            ),
-            _NavIcon(
-              icon: Icons.person_outline,
-              activeIcon: Icons.person,
-              label: l10n?.profileTitle ?? 'Profile',
-              active: currentIndex == 4,
-              onTap: () => _onTap(context, 4),
+            // Espacio para el FAB
+            const SizedBox(width: 72),
+            // Grupo derecho (2 iconos)
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _NavIcon(
+                    icon: Icons.notifications_outlined,
+                    activeIcon: Icons.notifications,
+                    label: l10n?.notificationsTab ?? 'Alerts',
+                    active: currentIndex == 3,
+                    onTap: () => _onTap(context, 3),
+                  ),
+                  _NavIcon(
+                    icon: Icons.person_outline,
+                    activeIcon: Icons.person,
+                    label: l10n?.profileTitle ?? 'Profile',
+                    active: currentIndex == 4,
+                    onTap: () => _onTap(context, 4),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -185,29 +202,50 @@ class _NavIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant;
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+    final inactiveColor = theme.colorScheme.onSurfaceVariant.withOpacity(0.6);
+
     return InkResponse(
       onTap: onTap,
-      splashColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-      highlightColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-      radius: 28,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      splashColor: primaryColor.withOpacity(0.12),
+      highlightColor: primaryColor.withOpacity(0.06),
+      radius: 32,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Icon with smooth scaling
             AnimatedScale(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              scale: active ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              scale: active ? 1.12 : 1.0,
               child: Container(
+                padding: const EdgeInsets.all(4),
                 decoration: active
                     ? BoxDecoration(
                         shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12, spreadRadius: 0.5)],
+                        color: primaryColor.withOpacity(0.12),
                       )
                     : null,
-                child: Icon(active ? activeIcon : icon, color: color, size: 26),
+                child: Icon(
+                  active ? activeIcon : icon,
+                  color: active ? primaryColor : inactiveColor,
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(height: 3),
+            // Active indicator bar
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              width: active ? 24 : 0,
+              height: 2.5,
+              decoration: BoxDecoration(
+                color: primaryColor,
+                borderRadius: BorderRadius.circular(1.25),
               ),
             ),
           ],
