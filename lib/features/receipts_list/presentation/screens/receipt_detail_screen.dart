@@ -16,6 +16,8 @@ import 'package:recibos_flutter/core/theme/app_colors.dart';
 import 'package:recibos_flutter/features/receipt_detail/bloc/receipt_detail_bloc.dart';
 import 'package:recibos_flutter/features/receipt_detail/bloc/receipt_detail_event.dart';
 import 'package:recibos_flutter/features/receipt_detail/bloc/receipt_detail_state.dart';
+import 'package:recibos_flutter/features/receipts_list/presentation/widgets/receipt_ticket_header.dart';
+import 'package:recibos_flutter/features/receipts_list/presentation/widgets/receipt_paper_header.dart';
 
 class ReceiptDetailScreen extends StatelessWidget {
   final Object? receipt;
@@ -150,61 +152,8 @@ class _ReceiptDetailView extends StatelessWidget {
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: GlassCard(
-                      borderRadius: 24,
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: cs.primary.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(Icons.receipt_long_outlined, color: cs.primary),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  receipt.merchantName ?? (receipt.category ?? t.receiptLabel),
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: FlowColors.text(context)),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    Text(
-                                      t.totalLabel(''),
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FlowColors.textSecondary(context)),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      currency.format(receipt.amount ?? 0),
-                                      style: const TextStyle(color: FlowColors.primary, fontWeight: FontWeight.w700, fontSize: 18),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    if (receipt.purchaseDate != null) ...[
-                                      Icon(Icons.event_outlined, size: 16, color: FlowColors.textSecondary(context)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        DateFormat.yMMMd(locale).format(receipt.purchaseDate!.toLocal()),
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: FlowColors.textSecondary(context)),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: ReceiptPaperHeader(receipt: receipt, items: items),
                   ),
                 ),
                 if (items.isEmpty)
@@ -297,9 +246,15 @@ class _ItemTile extends StatelessWidget {
     final unitPriceStr = itemFmt.format(unitPrice);
     final totalStr = itemFmt.format(total);
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      onTap: () {
+    return Container(
+      decoration: BoxDecoration(
+        border: (item.isVerified ?? false)
+            ? Border(left: BorderSide(color: FlowColors.primary.withOpacity(0.9), width: 3))
+            : null,
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        onTap: () {
         final productId = item.product?.id ?? item.productId;
         if (productId != null && productId.isNotEmpty) {
           context.push(
@@ -345,23 +300,25 @@ class _ItemTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                totalStr,
-                style: const TextStyle(
-                  color: FlowColors.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              totalStr,
+              style: const TextStyle(
+                color: FlowColors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
-              if (item.isVerified ?? false)
-                const Icon(Icons.check_circle, size: 14, color: FlowColors.primary),
-            ],
+            ),
           ),
           const SizedBox(width: 8),
+          if (item.isVerified ?? false)
+            const Icon(Icons.check_circle, size: 16, color: FlowColors.primary),
+          const SizedBox(width: 6),
           IconButton(
             iconSize: 18,
             padding: EdgeInsets.zero,
@@ -371,6 +328,7 @@ class _ItemTile extends StatelessWidget {
             onPressed: () => _openEditItemSheet(context, item),
           ),
         ],
+      ),
       ),
     );
   }

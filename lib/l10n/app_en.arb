@@ -52,6 +52,7 @@
   "spend30d": "Spending (30d)",
   "receipts30d": "Receipts (30d)",
   "receiptLabel": "Receipt",
+  "tax": "Tax",
   "product": "Product",
   "uncategorized": "Uncategorized",
   "noReceiptsYet": "No receipts yet. Add one!",
