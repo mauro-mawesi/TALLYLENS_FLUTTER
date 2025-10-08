@@ -1,3 +1,4 @@
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -272,15 +273,7 @@ class _ItemTile extends StatelessWidget {
           ToggleItemVerified(receiptId: item.receiptId, itemId: item.id, isVerified: next),
         );
       },
-      leading: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: cs.secondary.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(Icons.shopping_bag_outlined, color: cs.secondary),
-      ),
+      leading: null,
       title: Text(
         name,
         maxLines: 1,
@@ -303,15 +296,17 @@ class _ItemTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.10),
+              color: FlowColors.glassTint(context),
               borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: FlowColors.divider(context), width: 0.8),
             ),
             child: Text(
               totalStr,
-              style: const TextStyle(
-                color: FlowColors.primary,
+              style: TextStyle(
+                color: FlowColors.text(context),
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),

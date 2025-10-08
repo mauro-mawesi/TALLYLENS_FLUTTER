@@ -21,6 +21,7 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
     on<FetchBudgetProgress>(_onFetchBudgetProgress);
     on<FetchBudgetInsights>(_onFetchBudgetInsights);
     on<FetchBudgetPredictions>(_onFetchBudgetPredictions);
+    on<FetchBudgetSpendingTrend>(_onFetchBudgetSpendingTrend);
     on<FetchBudgetAlerts>(_onFetchBudgetAlerts);
     on<MarkAlertAsRead>(_onMarkAlertAsRead);
     on<UpdateBudget>(_onUpdateBudget);
@@ -54,7 +55,7 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
         print('Error loading progress: $e');
       }
 
-      // 4. Cargar insights en paralelo con predictions y alerts
+      // 4. Cargar insights, predictions, alerts y spending trend en paralelo
       final results = await Future.wait([
         _budgetService.getBudgetInsights(event.budgetId).catchError((e) {
           print('Error loading insights: $e');
@@ -68,11 +69,18 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
           print('Error loading alerts: $e');
           return <BudgetAlert>[];
         }),
+        _budgetService
+            .getBudgetSpendingTrend(event.budgetId, months: 6, mode: 'cumulative', sparse: true)
+            .catchError((e) {
+          print('Error loading spending trend: $e');
+          return <String, dynamic>{};
+        }),
       ]);
 
       final insights = results[0] as List<Map<String, dynamic>>;
       final predictions = results[1] as Map<String, dynamic>;
       final alerts = results[2] as List<BudgetAlert>;
+      final spendingTrend = results[3] as Map<String, dynamic>;
 
       // 5. Emitir estado final con todos los datos
       final currentState = state as BudgetDetailLoaded;
@@ -80,6 +88,7 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
         insights: insights,
         predictions: predictions,
         alerts: alerts,
+        spendingTrend: spendingTrend,
       ));
     } catch (e) {
       emit(BudgetDetailError('Error loading budget: ${e.toString()}'));
@@ -107,6 +116,12 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
         _budgetService.getBudgetInsights(_currentBudgetId!),
         _budgetService.getBudgetPredictions(_currentBudgetId!),
         _budgetService.getBudgetAlerts(budgetId: _currentBudgetId!),
+        _budgetService.getBudgetSpendingTrend(
+          _currentBudgetId!,
+          months: 6,
+          mode: 'cumulative',
+          sparse: true,
+        ),
       ]);
 
       final budget = results[0] as Budget;
@@ -114,6 +129,7 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
       final insights = results[2] as List<Map<String, dynamic>>;
       final predictions = results[3] as Map<String, dynamic>;
       final alerts = results[4] as List<BudgetAlert>;
+      final spendingTrend = results[5] as Map<String, dynamic>;
 
       // Emitir estado actualizado
       emit(BudgetDetailLoaded(
@@ -122,6 +138,7 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
         insights: insights,
         predictions: predictions,
         alerts: alerts,
+        spendingTrend: spendingTrend,
         isRefreshing: false,
       ));
     } catch (e) {
@@ -176,6 +193,27 @@ class BudgetDetailBloc extends Bloc<BudgetDetailEvent, BudgetDetailState> {
       emit(currentState.copyWith(predictions: predictions));
     } catch (e) {
       print('Error fetching budget predictions: $e');
+    }
+  }
+
+  /// Carga la tendencia de gastos (histórico + proyección).
+  Future<void> _onFetchBudgetSpendingTrend(
+    FetchBudgetSpendingTrend event,
+    Emitter<BudgetDetailState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! BudgetDetailLoaded) return;
+
+    try {
+      final spendingTrend = await _budgetService.getBudgetSpendingTrend(
+        event.budgetId,
+        months: 6,
+        mode: 'cumulative',
+        sparse: true,
+      );
+      emit(currentState.copyWith(spendingTrend: spendingTrend));
+    } catch (e) {
+      print('Error fetching budget spending trend: $e');
     }
   }
 

@@ -20,7 +20,7 @@ class NeonLineChart extends StatelessWidget {
     required this.maxY,
     this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
     this.showDots = false,
-    this.showGrid = false,
+    this.showGrid = true,
     this.xLabels,
     this.tooltipLabelBuilder,
   });
@@ -59,7 +59,21 @@ class NeonLineChart extends StatelessWidget {
                 },
               ),
             ),
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 50,
+                getTitlesWidget: (value, meta) {
+                  return Text(
+                    value.toStringAsFixed(0),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  );
+                },
+              ),
+            ),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),

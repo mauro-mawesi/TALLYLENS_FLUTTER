@@ -18,9 +18,22 @@ import 'package:recibos_flutter/features/splash/splash_screen.dart';
 import 'package:recibos_flutter/core/services/widget_service.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:animated_theme_switcher/animated_theme_switcher.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
+import 'package:recibos_flutter/core/services/fcm_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Registrar handler para mensajes en background
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
   await Hive.initFlutter();
   setupServiceLocator();
   await themeController.load();
@@ -36,6 +49,23 @@ Future<void> main() async {
     api.setLocaleCode(lc.locale!.languageCode);
   }
   await sl<AuthService>().init();
+
+  // Inicializar FCM (notificaciones push) si el usuario está autenticado
+  final authService = sl<AuthService>();
+  print('🔐 Auth status: isLoggedIn=${authService.isLoggedIn}');
+
+  if (authService.isLoggedIn) {
+    print('🔥 Initializing FCM...');
+    try {
+      await sl<FCMService>().initialize();
+      print('✅ FCM initialized successfully');
+    } catch (e) {
+      print('❌ Error initializing FCM: $e');
+      // No bloqueamos la app si FCM falla
+    }
+  } else {
+    print('⚠️ User not logged in, skipping FCM initialization');
+  }
 
   // Inicializar widget service
   final widgetService = sl<WidgetService>();

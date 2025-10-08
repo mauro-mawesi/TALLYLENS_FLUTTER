@@ -150,7 +150,10 @@ class BudgetService {
   /// Incluye spending actual, porcentaje, días restantes y proyecciones.
   Future<BudgetProgress> getBudgetProgress(String budgetId) async {
     final response = await _apiService.getBudgetProgress(budgetId);
-    return BudgetProgress.fromJson(response as Map<String, dynamic>);
+    print('DEBUG: Budget progress response: $response');
+    final progress = BudgetProgress.fromJson(response as Map<String, dynamic>);
+    print('DEBUG: Parsed progress - currentSpending: ${progress.currentSpending}, percentage: ${progress.percentage}');
+    return progress;
   }
 
   /// Obtiene un resumen de todos los presupuestos activos del usuario.
@@ -171,6 +174,34 @@ class BudgetService {
   /// Usa ML-style analytics para estimar si se excederá el presupuesto.
   Future<Map<String, dynamic>> getBudgetPredictions(String budgetId) async {
     final response = await _apiService.getBudgetPredictions(budgetId);
+    return response as Map<String, dynamic>;
+  }
+
+  /// Obtiene el histórico mensual de gastos y proyección para un presupuesto.
+  /// Incluye datos de los últimos [months] meses y proyección para el mes actual.
+  /// mode: 'cumulative' para serie acumulada del mes actual; sparse: sólo días con recibos.
+  Future<Map<String, dynamic>> getBudgetSpendingTrend(
+    String budgetId, {
+    int months = 6,
+    String mode = 'cumulative',
+    bool sparse = true,
+  }) async {
+    final response = await _apiService.getBudgetSpendingTrend(
+      budgetId,
+      months: months,
+      mode: mode,
+      sparse: sparse,
+    );
+    try {
+      final cm = (response['currentMonth'] as Map<String, dynamic>?);
+      final dp = (cm != null ? cm['dailyPoints'] as List<dynamic>? : null)?.length ?? 0;
+      final hm = (response['historicalMonths'] as List<dynamic>?)?.length ??
+          (response['historicalData'] as List<dynamic>?)?.length ?? 0;
+      final proj = (response['projection'] as Map<String, dynamic>?)?['projectedTotal'];
+      // Debug para verificar payload recibido
+      // ignore: avoid_print
+      print('DEBUG: SpendingTrend months=$hm, dailyPoints=$dp, projection=$proj');
+    } catch (_) {}
     return response as Map<String, dynamic>;
   }
 

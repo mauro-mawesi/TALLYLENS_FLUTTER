@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:recibos_flutter/core/di/service_locator.dart';
 import 'package:recibos_flutter/core/models/budget.dart';
@@ -150,8 +151,8 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
         'category': _selectedCategory,
         'amount': double.parse(_amountController.text),
         'period': _selectedPeriod,
-        'startDate': _startDate.toIso8601String(),
-        'endDate': _endDate.toIso8601String(),
+        'startDate': DateFormat('yyyy-MM-dd').format(_startDate),
+        'endDate': DateFormat('yyyy-MM-dd').format(_endDate),
         'currency': _currency,
         'alertThresholds': _alertThresholds,
         'isRecurring': _isRecurring,
@@ -176,7 +177,7 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
             ),
           ),
         );
-        Navigator.of(context).pop(true); // Return true to indicate success
+        context.pop(true); // Return true to indicate success
       }
     } catch (e) {
       if (mounted) {

@@ -27,6 +27,7 @@ class BudgetDetailLoaded extends BudgetDetailState {
   final List<Map<String, dynamic>>? insights;
   final Map<String, dynamic>? predictions;
   final List<BudgetAlert>? alerts;
+  final Map<String, dynamic>? spendingTrend;
   final bool isRefreshing;
 
   const BudgetDetailLoaded({
@@ -35,6 +36,7 @@ class BudgetDetailLoaded extends BudgetDetailState {
     this.insights,
     this.predictions,
     this.alerts,
+    this.spendingTrend,
     this.isRefreshing = false,
   });
 
@@ -45,6 +47,7 @@ class BudgetDetailLoaded extends BudgetDetailState {
     List<Map<String, dynamic>>? insights,
     Map<String, dynamic>? predictions,
     List<BudgetAlert>? alerts,
+    Map<String, dynamic>? spendingTrend,
     bool? isRefreshing,
   }) {
     return BudgetDetailLoaded(
@@ -53,6 +56,7 @@ class BudgetDetailLoaded extends BudgetDetailState {
       insights: insights ?? this.insights,
       predictions: predictions ?? this.predictions,
       alerts: alerts ?? this.alerts,
+      spendingTrend: spendingTrend ?? this.spendingTrend,
       isRefreshing: isRefreshing ?? this.isRefreshing,
     );
   }
@@ -82,6 +86,7 @@ class BudgetDetailLoaded extends BudgetDetailState {
         insights,
         predictions,
         alerts,
+        spendingTrend,
         isRefreshing,
       ];
 }

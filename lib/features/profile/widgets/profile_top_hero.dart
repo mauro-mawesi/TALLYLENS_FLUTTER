@@ -31,6 +31,7 @@ class _ProfileTopHeroState extends State<ProfileTopHero> {
 
   void _loadProfileImage() {
     final user = sl<AuthService>().profile;
+    print('DEBUG: Loading profile image, URL: ${user?.profileImageUrl}');
     setState(() {
       _profileImageUrl = user?.profileImageUrl;
     });
@@ -250,16 +251,19 @@ class _AvatarRing extends StatelessWidget {
                         fit: BoxFit.cover,
                         cacheWidth: 200,
                         cacheHeight: 200,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Text(
-                            initials,
-                            style: const TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                        errorBuilder: (_, __, error) {
+                          print('ERROR: Failed to load profile image from $imageUrl: $error');
+                          return Center(
+                            child: Text(
+                              initials,
+                              style: const TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
                           return Center(

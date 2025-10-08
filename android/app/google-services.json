@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "703299755477",
+    "project_id": "tallylensapp",
+    "storage_bucket": "tallylensapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:703299755477:android:db02da7549a66f1acff15c",
+        "android_client_info": {
+          "package_name": "com.example.recibos_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2ZjUCCRx7poSfcnu7Tr1GVgTrvUy3C5c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

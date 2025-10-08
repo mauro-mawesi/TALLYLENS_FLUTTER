@@ -270,5 +270,27 @@
   "budgetSectionPeriod": "Período",
   "budgetSectionAlerts": "Alertas",
   "budgetSectionRecurrence": "Recurrencia",
-  "budgetSectionNotifications": "Notificaciones"
+  "budgetSectionNotifications": "Notificaciones",
+  "chartNoDataAvailable": "No hay datos disponibles",
+  "budgetChartSpendingTrend": "Tendencia de gastos",
+  "budgetChartSpendingTrendSubtitle": "Gasto diario a lo largo del tiempo",
+  "budgetPredictionTitle": "Predicción",
+  "budgetPredictionOnTrack": "Vas en camino a cumplir el presupuesto",
+  "budgetPredictionWillExceed": "Probablemente excederás tu presupuesto",
+  "budgetPredictionProjectedSpending": "Gasto proyectado: {amount}",
+  "@budgetPredictionProjectedSpending": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+  "budgetPredictionRiskHigh": "Riesgo: ALTO",
+  "budgetPredictionRiskLow": "Riesgo: BAJO",
+  "budgetStatusExpired": "Expirado",
+  "budgetStatusInactive": "Inactivo",
+  "budgetSpent": "Gastado",
+  "budgetAmount": "Presupuesto",
+  "budgetPercentUsed": "usado",
+  "budgetDaysLeft": "días restantes",
+  "budgetReceiptsCount": "Recibos",
+  "budgetRemaining": "Restante"
 }

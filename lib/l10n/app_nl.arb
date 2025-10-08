@@ -270,5 +270,27 @@
   "budgetSectionPeriod": "Periode",
   "budgetSectionAlerts": "Meldingen",
   "budgetSectionRecurrence": "Herhaling",
-  "budgetSectionNotifications": "Notificaties"
+  "budgetSectionNotifications": "Notificaties",
+  "chartNoDataAvailable": "Geen gegevens beschikbaar",
+  "budgetChartSpendingTrend": "Bestedingstrend",
+  "budgetChartSpendingTrendSubtitle": "Dagelijkse uitgaven over tijd",
+  "budgetPredictionTitle": "Voorspelling",
+  "budgetPredictionOnTrack": "Je zit op schema binnen het budget",
+  "budgetPredictionWillExceed": "Je overschrijdt waarschijnlijk je budget",
+  "budgetPredictionProjectedSpending": "Verwachte uitgaven: {amount}",
+  "@budgetPredictionProjectedSpending": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+  "budgetPredictionRiskHigh": "Risico: HOOG",
+  "budgetPredictionRiskLow": "Risico: LAAG",
+  "budgetStatusExpired": "Verlopen",
+  "budgetStatusInactive": "Inactief",
+  "budgetSpent": "Uitgegeven",
+  "budgetAmount": "Budget",
+  "budgetPercentUsed": "gebruikt",
+  "budgetDaysLeft": "dagen over",
+  "budgetReceiptsCount": "Bonnetjes",
+  "budgetRemaining": "Resterend"
 }

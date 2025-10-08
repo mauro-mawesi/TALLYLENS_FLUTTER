@@ -23,6 +23,9 @@ class ApiService {
 
   late final Dio _dio;
 
+  // Request deduplication cache to prevent duplicate concurrent requests
+  final Map<String, Future<Response<dynamic>>> _pendingRequests = {};
+
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: _baseUrl,
@@ -77,9 +80,58 @@ class ApiService {
     }
   }
 
-  Future<Response<dynamic>> _request(Future<Response<dynamic>> Function() fn) async {
+  /// Generate a unique key for request deduplication
+  String _getRequestKey(String method, String path, [Map<String, dynamic>? queryParams]) {
+    final query = queryParams?.entries.map((e) => '${e.key}=${e.value}').join('&') ?? '';
+    return '$method:$path${query.isNotEmpty ? "?$query" : ""}';
+  }
+
+  /// Execute request with deduplication to prevent concurrent duplicate calls
+  Future<Response<dynamic>> _request(
+    Future<Response<dynamic>> Function() fn, {
+    String? method,
+    String? path,
+    Map<String, dynamic>? queryParams,
+    bool skipDeduplication = false,
+  }) async {
+    // Skip deduplication for POST/PUT/DELETE (mutation operations)
+    if (skipDeduplication || method == 'POST' || method == 'PUT' || method == 'DELETE' || method == 'PATCH') {
+      try {
+        return await fn();
+      } on DioException catch (e) {
+        final code = e.response?.statusCode;
+        if (code == 401) {
+          final cb = AuthBridge.onUnauthorized;
+          if (cb != null) await cb();
+          throw UnauthorizedException('Sesión expirada');
+        }
+        throw Exception(e.message);
+      }
+    }
+
+    // For GET requests, use deduplication
+    final key = _getRequestKey(method ?? 'GET', path ?? '', queryParams);
+
+    // If there's already a pending request for this key, return it
+    if (_pendingRequests.containsKey(key)) {
+      debugPrint('⚡ Deduplicating request: $key');
+      return _pendingRequests[key]!;
+    }
+
+    // Create and cache the request
+    final requestFuture = _executeRequest(fn, key);
+    _pendingRequests[key] = requestFuture;
+
+    return requestFuture;
+  }
+
+  Future<Response<dynamic>> _executeRequest(
+    Future<Response<dynamic>> Function() fn,
+    String key,
+  ) async {
     try {
-      return await fn();
+      final response = await fn();
+      return response;
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       if (code == 401) {
@@ -88,6 +140,9 @@ class ApiService {
         throw UnauthorizedException('Sesión expirada');
       }
       throw Exception(e.message);
+    } finally {
+      // Remove from cache when done (success or error)
+      _pendingRequests.remove(key);
     }
   }
 
@@ -528,7 +583,12 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getSpendingAnalysis({int months = 6}) async {
-    final response = await _request(() => _dio.get('/analytics/spending-analysis', queryParameters: {'months': months}));
+    final response = await _request(
+      () => _dio.get('/analytics/spending-analysis', queryParameters: {'months': months}),
+      method: 'GET',
+      path: '/analytics/spending-analysis',
+      queryParams: {'months': months},
+    );
     if (response.statusCode == 200) {
       return response.data['data'] as Map<String, dynamic>;
     }
@@ -536,7 +596,12 @@ class ApiService {
   }
 
   Future<List<Map<String, dynamic>>> getMonthlyTotals({int months = 4}) async {
-    final response = await _request(() => _dio.get('/analytics/monthly-totals', queryParameters: {'months': months}));
+    final response = await _request(
+      () => _dio.get('/analytics/monthly-totals', queryParameters: {'months': months}),
+      method: 'GET',
+      path: '/analytics/monthly-totals',
+      queryParams: {'months': months},
+    );
     if (response.statusCode == 200) {
       final data = response.data['data'];
       final list = (data['monthlyTotals'] as List?) ?? const [];
@@ -593,7 +658,11 @@ class ApiService {
 
   /// Get specific budget by ID
   Future<Budget> getBudget(String id) async {
-    final response = await _request(() => _dio.get('/budgets/$id'));
+    final response = await _request(
+      () => _dio.get('/budgets/$id'),
+      method: 'GET',
+      path: '/budgets/$id',
+    );
     if (response.statusCode == 200) {
       final data = response.data['data'] as Map<String, dynamic>;
       final budgetJson = data['budget'] as Map<String, dynamic>;
@@ -606,7 +675,7 @@ class ApiService {
   Future<Budget> createBudget(Map<String, dynamic> budgetData) async {
     final response = await _request(() => _dio.post('/budgets', data: budgetData));
     if (response.statusCode == 201) {
-      final data = response.data['data'] as Map<String, dynamic>;
+      final data = response.data['data']['budget'] as Map<String, dynamic>;
       return Budget.fromJson(data);
     }
     throw Exception('Error creating budget: ${response.statusCode}');
@@ -616,7 +685,7 @@ class ApiService {
   Future<Budget> updateBudget(String id, Map<String, dynamic> budgetData) async {
     final response = await _request(() => _dio.put('/budgets/$id', data: budgetData));
     if (response.statusCode == 200) {
-      final data = response.data['data'] as Map<String, dynamic>;
+      final data = response.data['data']['budget'] as Map<String, dynamic>;
       return Budget.fromJson(data);
     }
     throw Exception('Error updating budget: ${response.statusCode}');
@@ -649,7 +718,11 @@ class ApiService {
 
   /// Get budget progress
   Future<Map<String, dynamic>> getBudgetProgress(String id) async {
-    final response = await _request(() => _dio.get('/budgets/$id/progress'));
+    final response = await _request(
+      () => _dio.get('/budgets/$id/progress'),
+      method: 'GET',
+      path: '/budgets/$id/progress',
+    );
     if (response.statusCode == 200) {
       return response.data['data'] as Map<String, dynamic>;
     }
@@ -658,7 +731,11 @@ class ApiService {
 
   /// Get budgets summary
   Future<Map<String, dynamic>> getBudgetsSummary() async {
-    final response = await _request(() => _dio.get('/budgets/summary'));
+    final response = await _request(
+      () => _dio.get('/budgets/summary'),
+      method: 'GET',
+      path: '/budgets/summary',
+    );
     if (response.statusCode == 200) {
       return response.data['data'] as Map<String, dynamic>;
     }
@@ -667,7 +744,11 @@ class ApiService {
 
   /// Get budget insights
   Future<List<dynamic>> getBudgetInsights(String id) async {
-    final response = await _request(() => _dio.get('/budgets/$id/insights'));
+    final response = await _request(
+      () => _dio.get('/budgets/$id/insights'),
+      method: 'GET',
+      path: '/budgets/$id/insights',
+    );
     if (response.statusCode == 200) {
       // Backend returns a list of insight objects in data
       return response.data['data'] as List<dynamic>;
@@ -677,11 +758,42 @@ class ApiService {
 
   /// Get budget predictions
   Future<Map<String, dynamic>> getBudgetPredictions(String id) async {
-    final response = await _request(() => _dio.get('/budgets/$id/predictions'));
+    final response = await _request(
+      () => _dio.get('/budgets/$id/predictions'),
+      method: 'GET',
+      path: '/budgets/$id/predictions',
+    );
     if (response.statusCode == 200) {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception('Error getting budget predictions: ${response.statusCode}');
+  }
+
+  /// Get budget spending trend (historical + projection)
+  /// Supports query params:
+  /// - months: number of past months to include (default 6)
+  /// - mode: 'cumulative' (default) to return month-to-date cumulative series
+  /// - sparse: if true, return only days with receipts in current month
+  Future<Map<String, dynamic>> getBudgetSpendingTrend(
+    String id, {
+    int months = 6,
+    String mode = 'cumulative',
+    bool sparse = true,
+  }) async {
+    final qp = <String, dynamic>{
+      'months': months.toString(),
+      'mode': mode,
+      'sparse': sparse.toString(),
+    };
+    final response = await _request(
+      () => _dio.get('/budgets/$id/spending-trend', queryParameters: qp),
+      method: 'GET',
+      path: '/budgets/$id/spending-trend',
+    );
+    if (response.statusCode == 200) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error getting budget spending trend: ${response.statusCode}');
   }
 
   /// Get budget alerts

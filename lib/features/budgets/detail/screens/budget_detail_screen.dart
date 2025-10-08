@@ -10,6 +10,8 @@ import 'package:recibos_flutter/features/budgets/widgets/widgets.dart';
 import 'package:intl/intl.dart';
 import 'package:recibos_flutter/core/services/budget_service.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:recibos_flutter/core/widgets/glass_card.dart';
+import 'package:recibos_flutter/core/theme/app_colors.dart';
 
 /// Pantalla de detalles de un presupuesto específico.
 /// Muestra progreso detallado, predicciones, insights y alertas.
@@ -90,7 +92,13 @@ class _BudgetDetailContent extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: () => context.push('/budgets/${budget.id}/edit'),
+            onPressed: () async {
+              await context.push('/budgets/${budget.id}/edit');
+              // Refresh budget details after editing
+              if (context.mounted) {
+                context.read<BudgetDetailBloc>().add(FetchBudgetDetail(budget.id));
+              }
+            },
             tooltip: l10n?.budgetEditTooltip ?? 'Edit budget',
           ),
           PopupMenuButton(
@@ -152,7 +160,11 @@ class _BudgetDetailContent extends StatelessWidget {
               _DateRangeCard(budget: budget),
 
               // Spending chart
-              if (progress != null) _SpendingChartCard(budget: budget, progress: progress),
+              if (progress != null) _SpendingChartCard(
+                budget: budget,
+                progress: progress,
+                spendingTrend: state.spendingTrend,
+              ),
 
               // Predictions
               if (state.predictions != null && state.predictions!.isNotEmpty)
@@ -302,9 +314,11 @@ class _DateRangeCard extends StatelessWidget {
     final theme = Theme.of(context);
     final dateFormat = DateFormat('MMM dd, yyyy');
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GlassCard(
+        borderRadius: 20,
+        color: FlowColors.glassTint(context),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,35 +415,116 @@ class _DateItem extends StatelessWidget {
 class _SpendingChartCard extends StatelessWidget {
   final Budget budget;
   final BudgetProgress progress;
+  final Map<String, dynamic>? spendingTrend;
 
   const _SpendingChartCard({
     required this.budget,
     required this.progress,
+    this.spendingTrend,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Generate mock data for demonstration
-    final chartData = _generateChartData();
+    final l10n = AppLocalizations.of(context);
 
-    return BudgetChart(
-      data: chartData,
-      type: ChartType.line,
-      title: 'Spending Trend',
-      subtitle: 'Daily spending over time',
-      currency: budget.currency,
-      maxY: budget.amount * 1.2,
-    );
+    // Preferimos serie acumulada del mes actual con puntos solo en días con recibos
+    final currentMonth = spendingTrend != null
+        ? spendingTrend!['currentMonth'] as Map<String, dynamic>?
+        : null;
+    final dailyPoints = currentMonth != null
+        ? (currentMonth['dailyPoints'] as List<dynamic>?)
+        : null;
+
+    if (dailyPoints != null && dailyPoints.isNotEmpty) {
+      final chartData = _generateChartDataFromCurrentMonth(dailyPoints);
+
+      // Proyección al final de mes (basada en histórico de 6 meses + MTD)
+      final projection = (spendingTrend?['projection'] as Map<String, dynamic>?) ?? {};
+      final projectedTotal = projection['projectedTotal'] as num?;
+
+      // Determinar día final del mes para ubicar la proyección en el eje X
+      final monthStr = (currentMonth?['month'] as String?) ?? DateFormat('yyyy-MM').format(DateTime.now());
+      final parts = monthStr.split('-');
+      final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+      final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+      final daysInMonth = DateTime(year, month + 1, 0).day;
+
+      // Ajuste de escala Y para no cortar proyección ni presupuesto
+      final candidates = <double>[budget.amount * 1.3, ...chartData.map((p) => p.value)];
+      if (projectedTotal != null) {
+        candidates.add(projectedTotal.toDouble() * 1.15);
+      }
+      final maxY = candidates.reduce((a, b) => a > b ? a : b);
+
+      return BudgetChart(
+        data: chartData,
+        type: ChartType.line,
+        title: l10n?.budgetChartSpendingTrend ?? 'Spending Trend',
+        subtitle: l10n?.budgetChartSpendingTrendSubtitle ?? 'Month-to-date cumulative & projection',
+        currency: budget.currency,
+        maxY: maxY,
+        budgetAmount: budget.amount,
+        currentSpending: progress.currentSpending,
+        projectedAmount: projectedTotal?.toDouble(),
+        showBudgetLine: true,
+        showProjection: projectedTotal != null,
+        projectionX: daysInMonth.toDouble(),
+        xMax: daysInMonth.toDouble(),
+      );
+    }
+
+    // Fallback: si no hay dailyPoints, intentar mostrar histórico mensual para no “ocultar” la gráfica
+    final historical = spendingTrend != null
+        ? (spendingTrend!['historicalData'] as List<dynamic>?)
+        : null;
+    if (historical != null && historical.isNotEmpty) {
+      final chartData = _generateChartDataFromHistorical(historical);
+      final maxY = [
+        budget.amount * 1.3,
+        ...chartData.map((p) => p.value),
+      ].reduce((a, b) => a > b ? a : b);
+
+      return BudgetChart(
+        data: chartData,
+        type: ChartType.line,
+        title: l10n?.budgetChartSpendingTrend ?? 'Spending Trend',
+        subtitle: l10n?.budgetChartSpendingTrendSubtitle ?? 'Monthly totals (historical)',
+        currency: budget.currency,
+        maxY: maxY,
+        budgetAmount: budget.amount,
+        currentSpending: progress.currentSpending,
+        // En histórico no mostramos proyección
+        showBudgetLine: true,
+        showProjection: false,
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
-  List<ChartDataPoint> _generateChartData() {
-    // Mock data - in real app, this would come from backend
-    return [
-      const ChartDataPoint(label: 'W1', value: 100),
-      const ChartDataPoint(label: 'W2', value: 250),
-      const ChartDataPoint(label: 'W3', value: 420),
-      const ChartDataPoint(label: 'W4', value: 550),
-    ];
+  // Convierte dailyPoints (solo días con recibos) a puntos acumulados por día del mes
+  List<ChartDataPoint> _generateChartDataFromCurrentMonth(List<dynamic> dailyPoints) {
+    return dailyPoints.map((item) {
+      final data = item as Map<String, dynamic>;
+      final dateStr = data['date'] as String; // YYYY-MM-DD
+      final cumulative = (data['cumulative'] as num).toDouble();
+      final dayInt = DateTime.parse(dateStr).day;
+      return ChartDataPoint(label: dayInt.toString(), value: cumulative, x: dayInt.toDouble());
+    }).toList();
+  }
+
+  // Fallback: construir datos a partir de histórico mensual
+  List<ChartDataPoint> _generateChartDataFromHistorical(List<dynamic> historicalData) {
+    return historicalData.map((item) {
+      final data = item as Map<String, dynamic>;
+      final month = data['month'] as String; // YYYY-MM
+      final total = (data['total'] as num).toDouble();
+      final parts = month.split('-');
+      final monthNum = int.tryParse(parts[1]) ?? 1;
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      final label = monthNum >= 1 && monthNum <= 12 ? monthNames[monthNum - 1] : month;
+      return ChartDataPoint(label: label, value: total);
+    }).toList();
   }
 }
 
@@ -441,61 +536,237 @@ class _PredictionsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final willExceed = predictions['willExceed'] ?? false;
-    final projectedSpending = predictions['projectedSpending'] ?? 0.0;
-    final confidence = predictions['confidence'] ?? 'medium';
+    final projectedSpending = (predictions['projectedSpending'] ?? 0.0) as num;
+    final confidence = predictions['confidence'] ?? 50;
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      color: willExceed
-          ? theme.colorScheme.errorContainer
-          : theme.colorScheme.primaryContainer,
-      child: Padding(
+    if (!isDark) {
+      final t = AppLocalizations.of(context);
+      final projectedText = t != null
+          ? t.budgetPredictionProjectedSpending(projectedSpending.toStringAsFixed(2))
+          : 'Projected spending: ${projectedSpending.toStringAsFixed(2)}';
+      // Light theme: keep current clean style
+      return Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  willExceed ? Icons.warning : Icons.trending_up,
-                  color: willExceed
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Prediction',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+        child: GlassCard(
+          borderRadius: 20,
+          color: willExceed
+              ? theme.colorScheme.errorContainer.withOpacity(0.3)
+              : theme.colorScheme.primaryContainer.withOpacity(0.3),
+          padding: const EdgeInsets.all(16),
+          child: _PredictionContent(
+            title: t?.budgetPredictionTitle ?? 'Prediction',
+            onTrackText: t?.budgetPredictionOnTrack ?? "You're on track to stay within budget",
+            willExceedText: t?.budgetPredictionWillExceed ?? "You're likely to exceed your budget",
+            projectedLabel: projectedText,
+            titleStyle: theme.textTheme.titleMedium,
+            textStyle: theme.textTheme.bodyMedium,
+            subTextStyle: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 12),
-            Text(
-              willExceed
-                  ? 'You\'re likely to exceed your budget'
-                  : 'You\'re on track to stay within budget',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Projected spending: ${projectedSpending.toStringAsFixed(2)}',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Confidence: ${confidence.toString().toUpperCase()}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
+            willExceed: willExceed,
+            projectedSpending: projectedSpending.toDouble(),
+            confidence: confidence,
+          ),
+        ),
+      );
+    }
+
+    // Dark theme palettes (conditional)
+    // Exceed likely => crimson palette; On-track => cyan/purple palette
+    final Color crimson = const Color(0xFFB71C1C); // deep red
+    final Color softRed = const Color(0xFFE57373);
+    final Color neonCyan = const Color(0xFF00E3FF);
+    final Color neonPurple = const Color(0xFF8A2BE2);
+
+    final bool exceed = willExceed == true;
+    final Color borderColor = exceed ? crimson.withOpacity(0.7) : neonCyan.withOpacity(0.6);
+    final Color glow1 = exceed ? crimson.withOpacity(0.22) : neonCyan.withOpacity(0.20);
+    final Color glow2 = exceed ? softRed.withOpacity(0.18) : neonPurple.withOpacity(0.16);
+    final Color cardBg = exceed
+        ? crimson.withOpacity(0.14)
+        : const Color(0xFF0D1B2A).withOpacity(0.35); // cool dark with cyan tint
+    final List<Color> iconGradient = exceed
+        ? [crimson, softRed]
+        : [neonPurple, neonCyan];
+    final Color accent = exceed ? crimson : neonCyan;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor, width: 1),
+          boxShadow: [
+            BoxShadow(color: glow1, blurRadius: 16, spreadRadius: 1, offset: const Offset(0, 6)),
+            BoxShadow(color: glow2, blurRadius: 24, spreadRadius: 1, offset: const Offset(0, 12)),
           ],
         ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  // Neon icon badge
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: iconGradient,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(color: glow1, blurRadius: 14, spreadRadius: 1),
+                      ],
+                    ),
+                    child: Icon(
+                      willExceed ? Icons.warning_amber_rounded : Icons.trending_up,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    (AppLocalizations.of(context)?.budgetPredictionTitle ?? 'Prediction'),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: accent,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                  const Spacer(),
+                  // Confidence chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: borderColor),
+                      color: accent.withOpacity(0.12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.bolt, size: 14, color: accent),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${confidence.toString()}%',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: accent,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                willExceed
+                    ? (AppLocalizations.of(context)?.budgetPredictionWillExceed ?? "You're likely to exceed your budget")
+                    : (AppLocalizations.of(context)?.budgetPredictionOnTrack ?? "You're on track to stay within budget"),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.route, size: 16, color: accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    (AppLocalizations.of(context)?.budgetPredictionProjectedSpending(
+                          projectedSpending.toStringAsFixed(2),
+                        ) ?? 'Projected spending: ${projectedSpending.toStringAsFixed(2)}'),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: accent),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(exceed ? Icons.warning_amber_rounded : Icons.shield_moon, size: 14, color: exceed ? accent : accent.withOpacity(0.9)),
+                  const SizedBox(width: 6),
+                  Text(
+                    exceed
+                        ? (AppLocalizations.of(context)?.budgetPredictionRiskHigh ?? 'Risk: HIGH')
+                        : (AppLocalizations.of(context)?.budgetPredictionRiskLow ?? 'Risk: LOW'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: exceed ? accent : accent.withOpacity(0.9),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+  // Small helper widget to keep light theme layout tidier
+  class _PredictionContent extends StatelessWidget {
+  final String title;
+  final String onTrackText;
+  final String willExceedText;
+  final String projectedLabel;
+  final TextStyle? titleStyle;
+  final TextStyle? textStyle;
+  final TextStyle? subTextStyle;
+  final bool willExceed;
+  final double projectedSpending;
+  final dynamic confidence;
+
+  const _PredictionContent({
+    required this.title,
+    required this.onTrackText,
+    required this.willExceedText,
+    required this.projectedLabel,
+    required this.titleStyle,
+    required this.textStyle,
+    required this.subTextStyle,
+    required this.willExceed,
+    required this.projectedSpending,
+    required this.confidence,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              willExceed ? Icons.warning : Icons.trending_up,
+              color: willExceed
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Text(title, style: titleStyle?.copyWith(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text('${confidence.toString()}%', style: subTextStyle),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          willExceed ? willExceedText : onTrackText,
+          style: textStyle?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(projectedLabel, style: textStyle),
+      ],
     );
   }
 }
@@ -509,9 +780,11 @@ class _InsightsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GlassCard(
+        borderRadius: 20,
+        color: FlowColors.glassTint(context),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,9 +845,11 @@ class _AlertsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GlassCard(
+        borderRadius: 20,
+        color: FlowColors.glassTint(context),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,9 +895,11 @@ class _BudgetSettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GlassCard(
+        borderRadius: 20,
+        color: FlowColors.glassTint(context),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

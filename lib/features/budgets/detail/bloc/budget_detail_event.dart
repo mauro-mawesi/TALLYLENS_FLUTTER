@@ -53,6 +53,16 @@ class FetchBudgetPredictions extends BudgetDetailEvent {
   List<Object> get props => [budgetId];
 }
 
+/// Evento para cargar tendencia de gastos (histórico + proyección).
+class FetchBudgetSpendingTrend extends BudgetDetailEvent {
+  final String budgetId;
+
+  const FetchBudgetSpendingTrend(this.budgetId);
+
+  @override
+  List<Object> get props => [budgetId];
+}
+
 /// Evento para cargar alertas del presupuesto.
 class FetchBudgetAlerts extends BudgetDetailEvent {
   final String budgetId;

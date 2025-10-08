@@ -524,20 +524,14 @@ class _ReceiptTile extends StatelessWidget {
       return DateFormat.yMMMd(locale).format(dt.toLocal());
     })();
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: FlowColors.secondary(context).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          Icons.receipt_long_outlined,
-          color: FlowColors.secondary(context),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: FlowColors.secondary(context).withOpacity(0.8), width: 3),
         ),
       ),
+      child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       title: Text(
         merchant.isNotEmpty ? merchant : category,
         style: TextStyle(
@@ -567,9 +561,10 @@ class _ReceiptTile extends StatelessWidget {
           Text(
             amount,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: FlowColors.primary,
-            ),
+                  fontWeight: FontWeight.w700,
+                  color: FlowColors.text(context),
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
           ),
         ],
       ),
@@ -577,6 +572,6 @@ class _ReceiptTile extends StatelessWidget {
         HapticFeedback.selectionClick();
         context.push('/detalle', extra: receipt);
       },
-    );
+    ));
   }
 }

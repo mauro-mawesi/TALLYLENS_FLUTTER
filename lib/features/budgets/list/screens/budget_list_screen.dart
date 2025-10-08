@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recibos_flutter/core/di/service_locator.dart';
+import 'package:recibos_flutter/core/models/budget.dart';
 import 'package:recibos_flutter/features/budgets/list/bloc/budget_list_bloc.dart';
 import 'package:recibos_flutter/features/budgets/list/bloc/budget_list_event.dart';
 import 'package:recibos_flutter/features/budgets/list/bloc/budget_list_state.dart';
 import 'package:recibos_flutter/features/budgets/widgets/widgets.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:recibos_flutter/core/widgets/glass_card.dart';
+import 'package:recibos_flutter/core/theme/app_colors.dart';
 
 /// Pantalla principal que muestra la lista de presupuestos del usuario.
 /// Incluye filtros por categoría, período y estado, además de opciones para
@@ -66,7 +69,12 @@ class _BudgetListView extends StatelessWidget {
                     : (l10n?.budgetListNoBudgetsMessage ?? 'Create your first budget to start tracking your spending and achieve your financial goals.'),
                 onActionPressed: state.hasActiveFilters
                     ? () => context.read<BudgetListBloc>().add(const ClearBudgetFilters())
-                    : () => context.push('/budgets/create'),
+                    : () async {
+                        await context.push('/budgets/create');
+                        if (context.mounted) {
+                          context.read<BudgetListBloc>().add(const RefreshBudgets());
+                        }
+                      },
                 actionLabel: state.hasActiveFilters ? (l10n?.clearFilters ?? 'Clear Filters') : (l10n?.budgetFormCreateCta ?? 'Create Budget'),
               );
             }
@@ -104,9 +112,19 @@ class _BudgetListView extends StatelessWidget {
                         (context, index) {
                           final budget = state.budgets[index];
 
+                          // Extract progress from budget if available
+                          BudgetProgress? progress;
+                          if (budget.metadata != null && budget.metadata!['progress'] != null) {
+                            try {
+                              progress = BudgetProgress.fromJson(budget.metadata!['progress'] as Map<String, dynamic>);
+                            } catch (e) {
+                              print('Error parsing progress for budget ${budget.id}: $e');
+                            }
+                          }
+
                           return BudgetProgressCard(
                             budget: budget,
-                            progress: null, // Progress will be loaded in detail screen
+                            progress: progress,
                             showDetails: false,
                             onTap: () => context.push('/budgets/${budget.id}'),
                           );
@@ -123,17 +141,7 @@ class _BudgetListView extends StatelessWidget {
           return const SizedBox.shrink();
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await context.push('/budgets/create');
-          if (result == true && context.mounted) {
-            // Reload budgets after creating
-            context.read<BudgetListBloc>().add(const FetchBudgets());
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: Text(l10n?.budgetFabNew ?? 'New Budget'),
-      ),
+      // FAB is handled by AppShell based on route
     );
   }
 
@@ -376,9 +384,11 @@ class _BudgetSummaryCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context);
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GlassCard(
+        borderRadius: 20,
+        color: FlowColors.glassTint(context),
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [

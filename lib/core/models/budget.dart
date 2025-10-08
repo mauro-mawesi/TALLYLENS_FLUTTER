@@ -51,6 +51,15 @@ class Budget {
   });
 
   factory Budget.fromJson(Map<String, dynamic> json) {
+    // Extract progress if available and store in metadata
+    Map<String, dynamic>? metadata = json['metadata'] as Map<String, dynamic>?;
+    if (json['progress'] != null) {
+      metadata = {
+        ...?metadata,
+        'progress': json['progress'],
+      };
+    }
+
     return Budget(
       id: json['id'] as String,
       userId: json['userId'] as String,
@@ -67,7 +76,7 @@ class Budget {
       allowRollover: json['allowRollover'] as bool? ?? false,
       rolloverAmount: _toDouble(json['rolloverAmount']) ?? 0.0,
       notificationChannels: NotificationChannels.fromJson(json['notificationChannels'] as Map<String, dynamic>? ?? {}),
-      metadata: json['metadata'] as Map<String, dynamic>?,
+      metadata: metadata,
       lastAlertSentAt: json['lastAlertSentAt'] != null ? DateTime.tryParse(json['lastAlertSentAt'] as String) : null,
       lastAlertThreshold: json['lastAlertThreshold'] as int?,
       createdAt: DateTime.parse(json['createdAt'] as String),
